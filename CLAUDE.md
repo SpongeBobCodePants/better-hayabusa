@@ -28,6 +28,18 @@ A local desktop application that acts as a graphical UI for the command-line for
 - **Process stdout/stderr** is appended to disk on every line AND batched at ~10Hz for IPC to the frontend. Don't emit per-line events.
 - **Help is opt-in.** Never use modals, banners, or "did you know?" popups. Info is available behind icons and a `?` drawer; the user must click.
 - **The portable model is sacred.** No installer, no Program Files, no registry, no `%APPDATA%`. App state lives in `app.db` next to the exe.
+- **Display name vs short code.** Display strings (window title, page headers, About, README, this file) use **"Better Hayabusa"**. Internal short codes — Cargo package `bhc`, library `bhc_lib`, Tauri identifier `com.mercilesssoftware.bhc`, per-project metadata folder `.bhc/` — stay as `bhc` even though the app was renamed from "Better Hayabusa/ChainSaw". Don't propose renaming the internal codes unless asked.
+- **Public repo; never commit real engagement data.** Real client names, real hostnames, real IPs, real file paths from engagements MUST NOT be in tracked files. Synthetic test fixtures use placeholders like `WORKSTATION-01`, `CLIENT-A`, `192.0.2.0/24`. Anything resembling real data goes in the gitignored `/private/` folder (kept locally for ad-hoc testing). Before any first push of new public content, grep history for the data.
+
+## Repo setup (required for any clone)
+
+This is a public repo published at https://github.com/SpongeBobCodePants/better-hayabusa. Before your first commit in a fresh clone, set the per-repo author email to the GitHub noreply alias:
+
+```sh
+git config user.email "70819570+SpongeBobCodePants@users.noreply.github.com"
+```
+
+If you skip this, GitHub will reject the push with `GH007: Your push would publish a private email address` (because the user's global `user.email` is their real personal address, which isn't verified on the `SpongeBobCodePants` account and is protected by the privacy block). Author NAME can stay as your global setting; only email needs the per-repo override.
 
 ## Running and building
 
