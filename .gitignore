@@ -44,3 +44,6 @@ Thumbs.db
 
 # Project state if accidentally created in repo root during dev
 /.bhc/
+
+# Local-only scratch / private test inputs (real engagement data, etc.)
+/private/
