@@ -1,0 +1,36 @@
+# Auto-detect text files; normalize to LF in the repo, restore native EOL on checkout.
+# Eliminates "LF will be replaced by CRLF" warnings on Windows.
+* text=auto
+
+# Force LF for line-ending-sensitive formats regardless of OS
+*.sh         text eol=lf
+*.rs         text eol=lf
+*.toml       text eol=lf
+*.svelte     text eol=lf
+*.ts         text eol=lf
+*.js         text eol=lf
+*.json       text eol=lf
+*.md         text eol=lf
+*.html       text eol=lf
+*.css        text eol=lf
+*.yml        text eol=lf
+*.yaml       text eol=lf
+*.sql        text eol=lf
+
+# Force CRLF for Windows-native scripts
+*.ps1        text eol=crlf
+*.bat        text eol=crlf
+*.cmd        text eol=crlf
+
+# Binary
+*.png        binary
+*.ico        binary
+*.icns       binary
+*.jpg        binary
+*.jpeg       binary
+*.gif        binary
+*.woff       binary
+*.woff2      binary
+*.ttf        binary
+*.otf        binary
+*.pdf        binary
