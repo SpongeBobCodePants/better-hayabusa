@@ -10,6 +10,8 @@ This project uses **Claude Superpowers**. TDD, brainstorming, plan-writing, plan
 
 **Fallback if Superpowers is unavailable or a skill is missed:** follow `superpowers:test-driven-development` (write a failing test before implementation code) and `superpowers:verification-before-completion` (run the relevant tests/builds before declaring done). Load-bearing only when the skills don't fire.
 
+**Shipping approved work:** when the user has explicitly approved a completed unit of work for merge to `main`, they run `/ship` ([.claude/commands/ship.md](.claude/commands/ship.md)). It handles PR creation, Codex review request with retry/poll/feedback loop, fix cycles (max 5), and merge. Do NOT run `/ship` proactively — wait for the user trigger.
+
 ## Behavioral guidelines
 
 - **When the request is ambiguous:** enumerate interpretations; don't pick silently. If a simpler approach exists, propose it before implementing the asked-for one. If something is unclear, name what's confusing — asking is cheaper than guessing.
