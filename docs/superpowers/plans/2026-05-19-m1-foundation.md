@@ -1,6 +1,6 @@
 # M1 Foundation — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Bootstrap the Better Hayabusa/ChainSaw Tauri app so it launches on Windows, blocks gracefully on non-Windows, renders the sidebar shell with the Merciless Software footer, opens the About page showing the version from `tauri.conf.json`, and has a working `app.db` (next to the exe) with a migration runner.
 
@@ -73,7 +73,7 @@ Before starting, verify the workstation has:
 
 This task uses framework scaffolding tools — TDD applies only to *our* code, not the scaffold itself. Steps verify the scaffold succeeded rather than testing it.
 
-- [ ] **Step 1: Initialize SvelteKit + Tauri**
+- [x] **Step 1: Initialize SvelteKit + Tauri**
 
 Use the `create-tauri-app` recipe which handles both Tauri and the frontend framework.
 
@@ -95,7 +95,7 @@ If `create-tauri-app` refuses to scaffold into a non-empty directory containing 
 
 Expected: directory now contains `package.json`, `src/`, `src-tauri/`, `svelte.config.js`, `vite.config.ts`, `tsconfig.json`.
 
-- [ ] **Step 2: Verify dev mode runs**
+- [x] **Step 2: Verify dev mode runs**
 
 ```powershell
 pnpm install
@@ -104,7 +104,7 @@ pnpm tauri dev
 
 Expected: a Tauri window opens showing the default Svelte+Tauri welcome page. Close the window. If WebView2 or MSVC errors appear, install the prerequisites listed at the top of this plan first.
 
-- [ ] **Step 3: Pin and verify versions**
+- [x] **Step 3: Pin and verify versions**
 
 Open `package.json`. Confirm:
 - `@tauri-apps/api` major version is `2`
@@ -116,7 +116,7 @@ Open `src-tauri/Cargo.toml`. Confirm `tauri` is `2.x`.
 
 If any of these don't match, run `pnpm up @tauri-apps/api @tauri-apps/cli @sveltejs/kit svelte` and update Cargo dependencies accordingly. Re-run `pnpm tauri dev` to confirm.
 
-- [ ] **Step 4: Switch SvelteKit to static adapter**
+- [x] **Step 4: Switch SvelteKit to static adapter**
 
 ```powershell
 pnpm add -D @sveltejs/adapter-static
@@ -149,7 +149,7 @@ export const ssr = false;
 export const prerender = true;
 ```
 
-- [ ] **Step 5: Add Tailwind CSS 4**
+- [x] **Step 5: Add Tailwind CSS 4**
 
 ```powershell
 pnpm add -D tailwindcss @tailwindcss/vite
@@ -181,7 +181,7 @@ Replace `src/app.css` with the Tailwind import:
 
 Verify: `pnpm tauri dev` still launches. Tailwind classes (e.g., `class="p-4 text-lg"`) in the default page now style correctly.
 
-- [ ] **Step 6: Initialize shadcn-svelte**
+- [x] **Step 6: Initialize shadcn-svelte**
 
 ```powershell
 pnpm dlx shadcn-svelte@latest init
@@ -204,7 +204,7 @@ pnpm dlx shadcn-svelte@latest add button separator card
 
 Expected: `src/lib/components/ui/{button,separator,card}/` directories created. `pnpm tauri dev` still launches.
 
-- [ ] **Step 7: Write LICENSE (MIT)**
+- [x] **Step 7: Write LICENSE (MIT)**
 
 Create `LICENSE` at the project root:
 
@@ -232,7 +232,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-- [ ] **Step 8: Configure portable build target**
+- [x] **Step 8: Configure portable build target**
 
 Edit `src-tauri/tauri.conf.json`. Set:
 - `productName`: `Better Hayabusa-ChainSaw`
@@ -245,7 +245,7 @@ Edit `src-tauri/tauri.conf.json`. Set:
 
 Verify the JSON parses: `pnpm tauri build --debug --no-bundle` should at least compile without bundling.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```powershell
 git add package.json pnpm-lock.yaml svelte.config.js vite.config.ts tsconfig.json tailwind.config.ts postcss.config.js src/ src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json src-tauri/build.rs src-tauri/src src-tauri/icons src-tauri/capabilities LICENSE .gitignore
@@ -263,7 +263,7 @@ If `git status` shows files outside the above list that should be tracked, add t
 - Modify: `src-tauri/Cargo.toml`
 - Create: `src-tauri/src/lib.rs` (refactor from scaffold), `src-tauri/src/commands/mod.rs`, `src-tauri/src/db/mod.rs`, `src-tauri/src/platform/mod.rs`, `src-tauri/src/types.rs`
 
-- [ ] **Step 1: Add Rust crates**
+- [x] **Step 1: Add Rust crates**
 
 Edit `src-tauri/Cargo.toml`. In `[dependencies]`, ensure these are present (versions are minimums; let cargo pick latest compatible):
 
@@ -294,13 +294,13 @@ cd ..
 
 Expected: builds cleanly. If `rusqlite` fails to compile because of missing system libs, the `bundled` feature should resolve it (it builds SQLite from source).
 
-- [ ] **Step 2: Add Tauri plugins on the frontend side**
+- [x] **Step 2: Add Tauri plugins on the frontend side**
 
 ```powershell
 pnpm add @tauri-apps/plugin-dialog @tauri-apps/plugin-os
 ```
 
-- [ ] **Step 3: Refactor `src-tauri/src/lib.rs` to a modular layout**
+- [x] **Step 3: Refactor `src-tauri/src/lib.rs` to a modular layout**
 
 Replace the scaffold `lib.rs` with:
 
@@ -403,7 +403,7 @@ pub fn get_app_version(app: tauri::AppHandle) -> Result<AppVersion, String> {
 // implemented in Task 5
 ```
 
-- [ ] **Step 4: Verify build**
+- [x] **Step 4: Verify build**
 
 ```powershell
 cd src-tauri
@@ -413,7 +413,7 @@ cd ..
 
 Expected: clean build. Any unused-warning is fine for now.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/src package.json pnpm-lock.yaml
@@ -431,7 +431,7 @@ git commit -m "chore: add rust deps, modular src-tauri layout, ts-rs scaffolding
 
 This is the first end-to-end command. TDD: Rust unit test → implementation → ts-rs codegen → frontend wrapper → smoke render.
 
-- [ ] **Step 1: Write the failing Rust unit test**
+- [x] **Step 1: Write the failing Rust unit test**
 
 The current `get_app_version` in `commands/app.rs` requires a `tauri::AppHandle`, which is hard to construct in a unit test. Refactor to separate the data shape from the runtime: keep the public command thin, put the testable logic in a pure helper.
 
@@ -478,7 +478,7 @@ pub mod types;
 // ... rest unchanged
 ```
 
-- [ ] **Step 2: Run the test, confirm it fails or passes**
+- [x] **Step 2: Run the test, confirm it fails or passes**
 
 ```powershell
 cd src-tauri
@@ -490,7 +490,7 @@ Expected: **PASS** (the shape test is straightforward — this confirms the test
 
 If it fails, fix `AppVersion`'s derive or the test until it passes.
 
-- [ ] **Step 3: Generate TS types via ts-rs**
+- [x] **Step 3: Generate TS types via ts-rs**
 
 ts-rs writes `.ts` files when the test runner exercises the `#[ts(export)]` types. Add an explicit test that touches each exported type so codegen runs reliably:
 
@@ -529,7 +529,7 @@ Create `src/lib/generated/.gitkeep` (empty file) so the dir exists when generate
 New-Item -ItemType File src/lib/generated/.gitkeep
 ```
 
-- [ ] **Step 4: Add `.gitignore` entry**
+- [x] **Step 4: Add `.gitignore` entry**
 
 The existing `.gitignore` already has `src/lib/generated/`. Confirm `.gitkeep` is the only tracked file in that dir:
 
@@ -543,7 +543,7 @@ src/lib/generated/*
 !src/lib/generated/.gitkeep
 ```
 
-- [ ] **Step 5: Write the frontend wrapper**
+- [x] **Step 5: Write the frontend wrapper**
 
 Create `src/lib/ipc/app.ts`:
 
@@ -556,7 +556,7 @@ export async function getAppVersion(): Promise<AppVersion> {
 }
 ```
 
-- [ ] **Step 6: Wire it into the Home page as a smoke check**
+- [x] **Step 6: Wire it into the Home page as a smoke check**
 
 Replace `src/routes/+page.svelte` with:
 
@@ -591,7 +591,7 @@ Replace `src/routes/+page.svelte` with:
 </main>
 ```
 
-- [ ] **Step 7: Run dev mode and visually verify**
+- [x] **Step 7: Run dev mode and visually verify**
 
 ```powershell
 pnpm tauri dev
@@ -601,7 +601,7 @@ Expected: window opens, "Better Hayabusa/ChainSaw" header, "App version: `0.1.0`
 
 Close the window.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/src src-tauri/tests src/lib/ipc src/lib/generated/.gitkeep src/routes/+page.svelte .gitignore
@@ -624,7 +624,7 @@ The portable model puts `app.db` next to the executable. In `cargo run` / `tauri
 
 We'll provide a single resolver function and unit-test it with a tempdir.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `src-tauri/tests/paths.rs`:
 
@@ -653,7 +653,7 @@ fn app_paths_errors_on_exe_without_parent() {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```powershell
 cd src-tauri
@@ -663,7 +663,7 @@ cd ..
 
 Expected: FAIL with "unresolved import `bhc_lib::paths`".
 
-- [ ] **Step 3: Implement `AppPaths`**
+- [x] **Step 3: Implement `AppPaths`**
 
 Create `src-tauri/src/paths.rs`:
 
@@ -719,7 +719,7 @@ pub mod types;
 // ... rest unchanged
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 ```powershell
 cd src-tauri
@@ -729,7 +729,7 @@ cd ..
 
 Expected: both tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src-tauri/src/paths.rs src-tauri/src/lib.rs src-tauri/tests/paths.rs
@@ -745,7 +745,7 @@ git commit -m "feat: AppPaths resolver (portable: app.db next to exe)"
 - Modify: `src-tauri/src/db/migrations.rs`, `src-tauri/src/db/app_db.rs`
 - Create: `src-tauri/tests/db_migrations.rs`
 
-- [ ] **Step 1: Write the initial migration**
+- [x] **Step 1: Write the initial migration**
 
 Create `src-tauri/migrations/app/001_init.sql`:
 
@@ -771,7 +771,7 @@ CREATE TABLE global_tools (
 INSERT INTO app_state (key, value) VALUES ('schema_version', '1');
 ```
 
-- [ ] **Step 2: Embed the migrations at compile time**
+- [x] **Step 2: Embed the migrations at compile time**
 
 The migration files live in the source tree and need to be reachable from the compiled binary. Use Rust's `include_str!` so the SQL ships in the binary.
 
@@ -833,7 +833,7 @@ pub fn run_migrations(conn: &Connection, migrations: &[Migration]) -> Result<(),
 }
 ```
 
-- [ ] **Step 3: Write the failing test**
+- [x] **Step 3: Write the failing test**
 
 Create `src-tauri/tests/db_migrations.rs`:
 
@@ -909,7 +909,7 @@ pub mod app_db;
 pub mod migrations;
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```powershell
 cd src-tauri
@@ -919,7 +919,7 @@ cd ..
 
 Expected: 3 tests PASS.
 
-- [ ] **Step 5: Implement `app_db::open_or_create`**
+- [x] **Step 5: Implement `app_db::open_or_create`**
 
 Create `src-tauri/src/db/app_db.rs`:
 
@@ -948,7 +948,7 @@ pub fn open_or_create(db_path: &Path) -> Result<Connection, AppDbError> {
 }
 ```
 
-- [ ] **Step 6: Write a test for `open_or_create`**
+- [x] **Step 6: Write a test for `open_or_create`**
 
 Add to `src-tauri/tests/db_migrations.rs`:
 
@@ -979,7 +979,7 @@ cd ..
 
 Expected: 4 tests PASS.
 
-- [ ] **Step 7: Wire app.db open into app startup**
+- [x] **Step 7: Wire app.db open into app startup**
 
 In `src-tauri/src/lib.rs`, open the database on `setup` and stash the `Connection` in Tauri's managed state behind a `Mutex`:
 
@@ -1030,7 +1030,7 @@ Make `AppState` public so command handlers in submodules can use it via `tauri::
 // Already in lib.rs above; ensure `pub struct AppState`.
 ```
 
-- [ ] **Step 8: Verify dev launch creates app.db**
+- [x] **Step 8: Verify dev launch creates app.db**
 
 ```powershell
 pnpm tauri dev
@@ -1043,7 +1043,7 @@ Get-ChildItem src-tauri/target/debug/app.db
 
 Expected: `app.db` exists. (It will be re-used on next launch.)
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```powershell
 git add src-tauri/migrations src-tauri/src/db src-tauri/src/lib.rs src-tauri/tests/db_migrations.rs
@@ -1058,7 +1058,7 @@ git commit -m "feat: app.db migration runner, open_or_create, WAL + FKs"
 - Modify: `src-tauri/src/commands/app.rs`, `src-tauri/src/lib.rs`, `src/lib/ipc/app.ts`, `src/lib/generated/.gitkeep`
 - Create: `src-tauri/tests/commands_app_state.rs`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `src-tauri/tests/commands_app_state.rs`. Since these commands take `State`, we test the underlying helper functions, not the command wrappers.
 
@@ -1121,7 +1121,7 @@ fn set_state_overwrites_existing_value() {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they pass**
+- [x] **Step 2: Run tests to verify they pass**
 
 ```powershell
 cd src-tauri
@@ -1131,7 +1131,7 @@ cd ..
 
 Expected: 3 tests PASS.
 
-- [ ] **Step 3: Add the Tauri command wrappers**
+- [x] **Step 3: Add the Tauri command wrappers**
 
 Edit `src-tauri/src/commands/app.rs`:
 
@@ -1176,7 +1176,7 @@ Register both new commands in `src-tauri/src/lib.rs`:
         ])
 ```
 
-- [ ] **Step 4: Verify build**
+- [x] **Step 4: Verify build**
 
 ```powershell
 cd src-tauri
@@ -1186,7 +1186,7 @@ cd ..
 
 Expected: clean build.
 
-- [ ] **Step 5: Add frontend wrappers**
+- [x] **Step 5: Add frontend wrappers**
 
 Append to `src/lib/ipc/app.ts`:
 
@@ -1200,7 +1200,7 @@ export async function setAppState(key: string, value: string): Promise<void> {
 }
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src-tauri/src src-tauri/tests/commands_app_state.rs src/lib/ipc/app.ts
@@ -1217,7 +1217,7 @@ git commit -m "feat: get_app_state and set_app_state commands"
 
 The OS gate runs once on app boot, calls `platform()` from `@tauri-apps/plugin-os`, and short-circuits the entire UI when the OS isn't Windows.
 
-- [ ] **Step 1: Write the platform store**
+- [x] **Step 1: Write the platform store**
 
 Create `src/lib/stores/platform.ts`:
 
@@ -1240,7 +1240,7 @@ export function getCachedPlatform(): SupportedPlatform | null {
 }
 ```
 
-- [ ] **Step 2: Write the unsupported-OS screen**
+- [x] **Step 2: Write the unsupported-OS screen**
 
 Create `src/lib/components/UnsupportedOs.svelte`:
 
@@ -1272,7 +1272,7 @@ Create `src/lib/components/UnsupportedOs.svelte`:
 </div>
 ```
 
-- [ ] **Step 3: Write the gate**
+- [x] **Step 3: Write the gate**
 
 Create `src/lib/components/OsGate.svelte`:
 
@@ -1299,7 +1299,7 @@ Create `src/lib/components/OsGate.svelte`:
 {/if}
 ```
 
-- [ ] **Step 4: Wire it into the root layout**
+- [x] **Step 4: Wire it into the root layout**
 
 Replace `src/routes/+layout.svelte` with:
 
@@ -1317,7 +1317,7 @@ Replace `src/routes/+layout.svelte` with:
 </OsGate>
 ```
 
-- [ ] **Step 5: Verify dev launch**
+- [x] **Step 5: Verify dev launch**
 
 ```powershell
 pnpm tauri dev
@@ -1327,7 +1327,7 @@ Expected on Windows: the existing Home page renders as before (smoke test still 
 
 On macOS/Linux (if you have one to test on): the Unsupported OS screen renders. Skip this if you only have Windows.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src/lib/stores/platform.ts src/lib/components/OsGate.svelte src/lib/components/UnsupportedOs.svelte src/routes/+layout.svelte
@@ -1342,7 +1342,7 @@ git commit -m "feat: OS gate component blocks non-Windows with unsupported-OS sc
 - Create: `src/lib/components/Sidebar.svelte`, `src/lib/components/SidebarFooter.svelte`
 - Modify: `src/routes/+layout.svelte`
 
-- [ ] **Step 1: Write the sidebar footer**
+- [x] **Step 1: Write the sidebar footer**
 
 Create `src/lib/components/SidebarFooter.svelte`:
 
@@ -1373,7 +1373,7 @@ Create `src/lib/components/SidebarFooter.svelte`:
 </button>
 ```
 
-- [ ] **Step 2: Write the sidebar**
+- [x] **Step 2: Write the sidebar**
 
 Create `src/lib/components/Sidebar.svelte`:
 
@@ -1445,7 +1445,7 @@ Create `src/lib/components/Sidebar.svelte`:
 </aside>
 ```
 
-- [ ] **Step 3: Wire the sidebar into the layout**
+- [x] **Step 3: Wire the sidebar into the layout**
 
 Replace `src/routes/+layout.svelte` with:
 
@@ -1469,7 +1469,7 @@ Replace `src/routes/+layout.svelte` with:
 </OsGate>
 ```
 
-- [ ] **Step 4: Verify dev launch**
+- [x] **Step 4: Verify dev launch**
 
 ```powershell
 pnpm tauri dev
@@ -1477,7 +1477,7 @@ pnpm tauri dev
 
 Expected: sidebar visible on left (Home, Projects, separator, Tools header, Hayabusa, Chainsaw, separator, Settings), Merciless Software footer at bottom with the version. Home page in the main area. Clicking sidebar links navigates between routes (some will 404 until built in later milestones — fine for now).
 
-- [ ] **Step 5: Add empty placeholder routes so sidebar links don't 404 in dev**
+- [x] **Step 5: Add empty placeholder routes so sidebar links don't 404 in dev**
 
 Create the minimum placeholders so navigation works:
 
@@ -1513,7 +1513,7 @@ Create the minimum placeholders so navigation works:
 </div>
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src/lib/components/Sidebar.svelte src/lib/components/SidebarFooter.svelte src/routes/+layout.svelte src/routes/projects src/routes/tools src/routes/settings
@@ -1529,7 +1529,7 @@ git commit -m "feat: sidebar shell with Tools section and Merciless Software foo
 
 The About page surfaces brand, tagline, version, license, GitHub link, and acknowledgements. It reads the version from the `get_app_version` command we already have.
 
-- [ ] **Step 1: Write the About page**
+- [x] **Step 1: Write the About page**
 
 Create `src/routes/settings/about/+page.svelte`:
 
@@ -1615,7 +1615,7 @@ Create `src/routes/settings/about/+page.svelte`:
 </div>
 ```
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 ```powershell
 pnpm tauri dev
@@ -1628,7 +1628,7 @@ Click the "Merciless Software v0.1.0" footer at the bottom of the sidebar. Expec
 - Acknowledgements section with all six links
 - Copyright "© 2026 Merciless Software"
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```powershell
 git add src/routes/settings/about
@@ -1644,7 +1644,7 @@ git commit -m "feat: About page with brand, version, license, acknowledgements"
 
 Replace the smoke-test home page with a minimal real Home that matches the spec's Section 5: brief explanation + "New Project" / "Open Project" buttons (disabled — wired up in M2) + empty "Recent" placeholder.
 
-- [ ] **Step 1: Replace Home page content**
+- [x] **Step 1: Replace Home page content**
 
 Edit `src/routes/+page.svelte`:
 
@@ -1685,7 +1685,7 @@ Edit `src/routes/+page.svelte`:
 </div>
 ```
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 ```powershell
 pnpm tauri dev
@@ -1693,7 +1693,7 @@ pnpm tauri dev
 
 Expected: Home shows the new layout. Buttons are disabled (with tooltip "Coming in M2").
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```powershell
 git add src/routes/+page.svelte
@@ -1704,7 +1704,7 @@ git commit -m "feat: Home page with intro and disabled project buttons"
 
 ### Task 11: Final verification + handoff
 
-- [ ] **Step 1: Run all Rust tests**
+- [x] **Step 1: Run all Rust tests**
 
 ```powershell
 cd src-tauri
@@ -1714,7 +1714,7 @@ cd ..
 
 Expected: all tests PASS. Recent counts: at minimum `commands_app` (1) + `paths` (2) + `db_migrations` (4) + `commands_app_state` (3) + `ts_export` (1) = **11 tests passing**.
 
-- [ ] **Step 2: Build a debug bundle to verify packaging works end-to-end**
+- [x] **Step 2: Build a debug bundle to verify packaging works end-to-end**
 
 ```powershell
 pnpm tauri build --debug
@@ -1722,7 +1722,7 @@ pnpm tauri build --debug
 
 Expected: build succeeds. Bundle path is reported (under `src-tauri/target/debug/bundle/`). Skip the actual install — just verify the bundle was produced.
 
-- [ ] **Step 3: Smoke-test the dev app one more time**
+- [x] **Step 3: Smoke-test the dev app one more time**
 
 ```powershell
 pnpm tauri dev
@@ -1737,7 +1737,7 @@ Expected:
 
 Close the window.
 
-- [ ] **Step 4: Commit any remaining changes**
+- [x] **Step 4: Commit any remaining changes**
 
 ```powershell
 git status
@@ -1745,7 +1745,7 @@ git status
 
 If clean, you're done. If not, review and commit anything outstanding.
 
-- [ ] **Step 5: Update CLAUDE.md with the now-known build/run commands**
+- [x] **Step 5: Update CLAUDE.md with the now-known build/run commands**
 
 Edit `CLAUDE.md`. Replace the "Running and building" section's "Planned" subsection with confirmed commands:
 
