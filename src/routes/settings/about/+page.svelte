@@ -40,7 +40,7 @@
       </div>
       <div>
         <span class="font-medium">License:</span> MIT
-        <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noreferrer" class="ml-2 text-blue-600 underline">
+        <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener noreferrer" class="ml-2 text-blue-600 underline">
           read
         </a>
       </div>
@@ -49,7 +49,7 @@
         <a
           href="https://github.com/MercilessSoftware/better-hayabusa-chainsaw"
           target="_blank"
-          rel="noreferrer"
+          rel="noopener noreferrer"
           class="text-blue-600 underline"
         >
           GitHub
@@ -67,7 +67,7 @@
       <ul class="space-y-1 text-sm">
         {#each acknowledgements as ack}
           <li>
-            <a href={ack.url} target="_blank" rel="noreferrer" class="text-blue-600 underline">
+            <a href={ack.url} target="_blank" rel="noopener noreferrer" class="text-blue-600 underline">
               {ack.name}
             </a>
           </li>

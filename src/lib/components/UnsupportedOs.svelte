@@ -16,7 +16,7 @@
     <Button
       href="https://github.com/MercilessSoftware/better-hayabusa-chainsaw/issues"
       target="_blank"
-      rel="noreferrer"
+      rel="noopener noreferrer"
       variant="outline"
     >
       Open the issue tracker
