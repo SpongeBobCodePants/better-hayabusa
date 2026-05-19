@@ -6,6 +6,8 @@ use thiserror::Error;
 pub enum PathError {
     #[error("executable path has no parent directory: {0}")]
     NoParent(PathBuf),
+    #[error("could not resolve current executable: {0}")]
+    CurrentExe(#[from] std::io::Error),
 }
 
 #[derive(Debug, Clone)]
@@ -30,8 +32,7 @@ impl AppPaths {
     }
 
     pub fn from_current_exe() -> Result<Self, PathError> {
-        let exe = std::env::current_exe()
-            .map_err(|_| PathError::NoParent(PathBuf::from("<current_exe failed>")))?;
+        let exe = std::env::current_exe()?;
         Self::from_exe(&exe)
     }
 }

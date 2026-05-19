@@ -6,7 +6,6 @@ use tempfile::tempdir;
 fn app_paths_from_exe_dir_places_db_next_to_exe() {
     let tmp = tempdir().unwrap();
     let fake_exe = tmp.path().join("bhc.exe");
-    std::fs::write(&fake_exe, b"").unwrap();
 
     let paths = AppPaths::from_exe(&fake_exe).unwrap();
 
