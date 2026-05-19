@@ -1,0 +1,46 @@
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Rust / Cargo
+src-tauri/target/
+src-tauri/Cargo.lock
+
+# Node
+node_modules/
+
+# SvelteKit / Vite build output
+.svelte-kit/
+build/
+dist/
+/package
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Tauri generated schemas (auto-completion for capabilities)
+src-tauri/gen/schemas
+
+# ts-rs generated types (regenerated on build)
+src/lib/generated/
+
+# Local env
+.env
+.env.local
+.env.*.local
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+
+# App state if accidentally created in repo root during dev
+/app.db
+/tools/
+
+# Project state if accidentally created in repo root during dev
+/.bhc/

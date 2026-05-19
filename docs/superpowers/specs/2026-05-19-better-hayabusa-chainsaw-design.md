@@ -165,11 +165,19 @@ If the user picks a folder for "New Project" that already contains `.bhc/project
 │   Jobs     │                                  │
 │   Queue    │                                  │
 │ ─────      │                                  │
+│ Tools      │                                  │
+│  Hayabusa  │                                  │
+│  Chainsaw  │                                  │
+│ ─────      │                                  │
 │ Settings   │                                  │
+│            │                                  │
+│ Merciless  │                                  │
+│ Software   │                                  │
+│ v1.2.3     │                                  │
 └────────────┴──────────────────────────────────┘
 ```
 
-The project section in the sidebar is only active when a project is open.
+The project section in the sidebar is only active when a project is open. The Tools section and the Merciless Software footer are always visible.
 
 ### Pages
 
@@ -182,7 +190,36 @@ The project section in the sidebar is only active when a project is open.
 | `/projects/[id]/jobs/new` | New-job wizard. Pick tool type → form pre-filled with defaults → add one or more **targets** (hostname + input path) → pick root output directory → save (and optionally run). |
 | `/projects/[id]/jobs/[jobId]` | Job detail: full settings (view/edit), Targets table, per-run history, "Run now", per-host live status table during a run, **Run details** panel (rendered from `run-info.txt`). |
 | `/projects/[id]/queue` | All jobs in current project grouped by status: Pending · Running · Completed · Failed. |
+| `/tools/[tool]` | Per-tool reference page (see § 6a): overview, resource links, version-aware ss64-style searchable CLI reference. One page per tool: `hayabusa`, `chainsaw`, future `takajo`. Always available regardless of whether a project is open. |
 | `/settings` | Theme, log retention, and a **Tools** section showing installed version + "Update tool", "Update rules", "Open in Explorer" buttons for each tool (see § 9a). Global default executable paths are set here and used to autofill new job forms. |
+| `/settings/about` | About page (see § 5a): branding, version, license, GitHub, acknowledgements. |
+
+## 5a. UI principles — help and information availability
+
+A cross-cutting UX rule for the whole app: **most controls and screens offer contextual help, but help is never intrusive.** No banners, no modals on load, no "did you know?" popups. Users opt in by clicking, hovering, or opening a help drawer.
+
+### Three layers of help
+
+| Layer | Trigger | Content |
+|---|---|---|
+| **Field-level** | Small info icon `ⓘ` to the right of each form field label | Hover = one-line tooltip (short description); click = popover with longer explanation, examples, and a link to the underlying tool's docs where applicable |
+| **Section-level** | Info icon next to section headers ("Targets", "Options", "Run history", etc.) | Click opens a popover explaining what the section does |
+| **Page-level** | `?` button in the page header (top-right) | Opens a right-side drawer with the full contextual help for the page: what it does, common workflows, gotchas |
+
+### Source of truth
+
+- **Tool-option help** (field-level on tool option fields) comes from the per-tool Rust `options.rs` catalog — the same catalog that renders `run-info.txt` (§ 8b). One place to edit, three places it shows up (form tooltip, run-info file, frontend popover).
+- **App/UI help** (section-level + page-level + non-tool field help) lives in `src/lib/help/` as Markdown files, named after the page or component they describe. Keeps copy close to the UI it describes.
+
+### Branding and About surface
+
+| Surface | Where | Content |
+|---|---|---|
+| **Sidebar footer** | Always visible at the bottom of the sidebar | `Merciless Software · v<version>` — small, low-contrast. Clickable → opens the About page. |
+| **About page** | `/settings/about` (and a quick link from the sidebar footer) | Tagline: *"Making your life suck less..."*; app version (from `tauri.conf.json` via the `get_app_version` Tauri command); license summary + link to `LICENSE`; GitHub link; acknowledgements (Hayabusa, Chainsaw, SigmaHQ Sigma rules, Tauri, Svelte, shadcn-svelte); copyright `© 2026 Merciless Software`. |
+
+**License (v1):** MIT (flagged for user confirmation — change pre-release if desired).
+**Version source:** `src-tauri/tauri.conf.json` is canonical. The frontend reads it via `get_app_version`. Cargo.toml and package.json reference the same value at build time.
 
 ## 6. Initial job types (v1 scope)
 
@@ -216,24 +253,100 @@ A Rust `defaults` provider per tool ships preconfigured argument sets matching t
 
 ### Extensibility
 
-A new tool type is a single-directory Rust module + one frontend form:
+Adding a **new job type** for an *existing executable* (e.g., adding `hayabusa_json_timeline` when the Hayabusa catalog already exists):
 
 ```
-src-tauri/src/tools/<tool>/
-├── mod.rs              # struct ToolImpl { ... } implementing the Tool trait
+src-tauri/src/tools/jobs/<job_type>/
+├── mod.rs              # impl Tool { ... }
 ├── settings.rs         # serde-derived settings struct + validators
 ├── defaults.rs         # default settings
-├── options.rs          # option-metadata catalog (name, description, type, choices)
 ├── command.rs          # build_command(settings, target, platform_ctx) -> Command
 └── output_paths.rs     # per-host output file conventions
 
-src/lib/tools/<tool>/
+src/lib/tools/<job_type>/
 └── Form.svelte         # frontend form, type-driven by ts-rs-generated types
 ```
 
-A central registry (`src-tauri/src/tools/registry.rs`) maps `tool_type` strings to implementations. The frontend gets the available tool types and their option metadata via the `list_tools` and `get_tool_metadata` Tauri commands.
+The new job module imports its option metadata from the existing per-executable catalog at `src-tauri/src/tools/references/<executable>.rs` — no duplication.
+
+Adding a **new executable** (e.g., Takajo): add `src-tauri/src/tools/references/takajo.rs` with the full option catalog and resource links, then add one or more job-type modules under `tools/jobs/`.
+
+A central registry (`src-tauri/src/tools/registry.rs`) maps `tool_type` strings to job-type implementations. The frontend gets available job types and per-job option metadata via the `list_tool_types` and `get_tool_metadata` Tauri commands; the reference page reads `get_tool_reference(executable)`.
 
 **Anticipated future tools** (architecture handles trivially): **Takajo** (Yamato Security's Hayabusa output enrichment tool, https://github.com/Yamato-Security/takajo), additional Chainsaw subcommands (`analyse srum`, `analyse mft`, etc.).
+
+## 6a. Tool reference pages
+
+Each supported tool gets a dedicated reference page (`/tools/<tool>`). One page per tool, always available regardless of whether a project is open. The reference is **not** read from the tool's `--help` output (brittle across versions); it's a hand-curated Rust catalog.
+
+### Content per page
+
+| Section | Content |
+|---|---|
+| **Overview** | 2-3 sentences describing what the tool is and what it's for |
+| **Resources** | Links to: GitHub repo, official docs, release notes for the documented version, sigma rules (where applicable), license |
+| **Version banner** | "Reference for `<tool> <version>` — your installed version: `<version>` ✓" or "⚠ Version mismatch: ref is for X, you have Y" |
+| **CLI reference** | ss64-style: searchable, grouped by subcommand, one entry per flag with type/default/description/example |
+
+### CLI reference UX
+
+- **Search box** at the top: instant text filter across flag names (short + long) and descriptions
+- **Subcommand sidebar** (sticky): table-of-contents listing subcommands (`csv-timeline`, `json-timeline`, `update-rules`, ...). Click jumps to the section
+- **Per-option card**:
+  - Short flag (`-d`) and long flag (`--directory`)
+  - Value type (path, string, integer, choice with allowed values, boolean)
+  - Required vs optional; default value if any
+  - Description (1-3 sentences)
+  - One concrete example with a copy-to-clipboard button
+- **Deep-linking**: each option has a URL fragment (e.g., `/tools/hayabusa#csv-timeline--exclude-status`). Form tooltips link to the relevant fragment via "See full reference" — opens the tool page scrolled to that option.
+
+### Data model — single source of truth
+
+Two related layers, with a clean ownership split:
+
+- **Per-executable reference catalog** (`src-tauri/src/tools/references/<executable>.rs`) — owns all option metadata for an executable, covering every subcommand including ones we don't implement as job types. This is what the reference page renders.
+- **Per-job-type module** (`src-tauri/src/tools/jobs/<job_type>/`) — consumes from the executable catalog for its specific subcommand's options. Adds what's job-type-specific: settings struct, defaults provider, command builder, output-path conventions.
+
+Each option entry carries a `surface` field so the catalog knows which options the job form actually exposes:
+
+```rust
+pub enum OptionSurface {
+    FormAndRef,   // Exposed in the job form AND in the reference page
+    RefOnly,      // Documented in the reference page only; not in job forms
+}
+
+pub struct OptionMetadata {
+    pub short:       Option<&'static str>,   // "-d"
+    pub long:        Option<&'static str>,   // "--directory"
+    pub value_type:  ValueType,
+    pub required:    bool,
+    pub default:     Option<&'static str>,
+    pub description: &'static str,
+    pub example:     &'static str,
+    pub subcommand:  &'static str,           // e.g., "csv-timeline"
+    pub surface:     OptionSurface,
+}
+
+pub struct ToolReference {
+    pub executable:         &'static str,    // "hayabusa"
+    pub documented_version: &'static str,    // "3.9.0"
+    pub overview:           &'static str,
+    pub resource_links:     &'static [ResourceLink],
+    pub options:            &'static [OptionMetadata],   // grouped by subcommand at render time
+}
+```
+
+The reference page (`/tools/hayabusa`) reads its `ToolReference` and renders all `options`. The job form reads the subset of `options` where `subcommand` matches its job type and `surface == FormAndRef`. The run-info text file (§ 8b) reads the same per-option entries for any flag actually in the command line. **One catalog, three surfaces, no duplication.**
+
+### Version awareness
+
+Each tool's catalog declares the **documented version** it targets (e.g., `pub const DOCUMENTED_VERSION: &str = "3.9.0"`). The reference page compares this to the installed version (from `global_tools.version_string` or a fresh check) and shows a banner accordingly. A reference catalog can be updated independently of code by editing the Rust file; the version constant moves with it.
+
+### Out of scope for v1
+
+- **Auto-extracting options from `<tool> --help`** — too brittle across versions; pinned hand-curated data is safer.
+- **Showing which of your jobs use a given flag** ("used in `APT-29 sweep`, `ransomware-IR`") — v1.1.
+- **Multiple version catalogs side-by-side** — v1 ships one documented version per tool.
 
 ## 7. Data model
 
@@ -329,7 +442,7 @@ src-tauri/migrations/
 - **`project.db` migrations** run when opening a project; the app runs any migrations whose number is greater than `projects.app_schema_version`, then updates that value.
 - **`app.db` migrations** run on app launch; the current version is tracked via `app_state.key = 'schema_version'`.
 
-Tauri's SQL plugin has built-in migration support; we use it for both databases.
+Migrations run in Rust on connection-open (via a small `db::migrations` module using `rusqlite`). Each `.sql` file is executed in a transaction; failure rolls back. We do not use the Tauri SQL plugin.
 
 ## 8. Process execution and live output
 
@@ -342,7 +455,7 @@ For each target in `job_hosts` (in `sort_order`):
 1. Create `job_run_hosts` row with `status='running'`, `started_at=now()`.
 2. Resolve `output_subdir = <root_output_dir>/<host_id>`; `mkdir -p` it.
 3. Call the tool's Rust command builder: `build_command(settings, target, platform_ctx) -> Command`. Persist `command_line` (the exact resolved arg list, shell-quoted for display) into the row.
-4. Write the per-host `run-info.txt` (§ 8b) into `<.bhc>/runs/<run_id>/hosts/<host_id>/`.
+4. Write the per-host `run-info.txt` (§ 8b) into `<project>/.bhc/runs/<run_id>/hosts/<host_id>/`.
 5. Spawn via `tokio::process::Command` with `stdout(Stdio::piped())`, `stderr(Stdio::piped())`.
 6. Concurrently read stdout and stderr line streams. Each line is appended to its log file on disk *and* added to a per-host ring buffer; a `tracing`-driven debouncer flushes a batched `RunOutputEvent` to the frontend at ~10Hz (not every line — keeps IPC sane for chatty tools).
 7. On process exit: write `exit_code`, `completed_at`, `status` (`completed` if exit 0, else `failed`). Update the host's `run-info.txt` to finalize duration/exit code.
@@ -379,12 +492,14 @@ The frontend never touches process I/O, SQLite, files, or HTTP. All access goes 
 | Command | Purpose |
 |---|---|
 | **App** |
+| `get_app_version()` | Read app version from `tauri.conf.json` (used by sidebar footer + About page) |
 | `get_app_state()` / `set_app_state(key, value)` | Theme, retention, etc. |
 | `list_recent_projects()` | Home page list |
 | `get_global_tools()` / `set_global_tool_path(tool, path)` | Settings page |
 | **Tools (registry & metadata)** |
 | `list_tool_types()` | Available tool types for the new-job wizard |
-| `get_tool_metadata(tool_type)` | Options, descriptions, defaults — used to build forms and to render `run-info.txt` |
+| `get_tool_metadata(tool_type)` | Options with `surface=FormAndRef` only — used to build forms and to render `run-info.txt` |
+| `get_tool_reference(tool_name)` | Full reference catalog for the tool page (all options, grouped by subcommand, with documented version + resource links) |
 | **Projects** |
 | `create_project(folder_path, name, description)` | Bootstraps `.bhc/project.db` |
 | `open_project(folder_path)` | Returns project metadata |
@@ -416,7 +531,7 @@ The frontend never touches process I/O, SQLite, files, or HTTP. All access goes 
 
 Two text files per run, written by Rust.
 
-**Per-host file** (`<.bhc>/runs/<run_id>/hosts/<host_id>/run-info.txt`): written at host start, finalized at host exit.
+**Per-host file** (`<project>/.bhc/runs/<run_id>/hosts/<host_id>/run-info.txt`): written at host start, finalized at host exit.
 
 ```
 Better Hayabusa/ChainSaw — Run Info
@@ -459,7 +574,7 @@ Options used:
                                Set to: D:\analysis\apt29\DC01\hayabusa_DC01.html
 ```
 
-**Run-level file** (`<.bhc>/runs/<run_id>/run-info.txt`): written when the run finishes.
+**Run-level file** (`<project>/.bhc/runs/<run_id>/run-info.txt`): written when the run finishes.
 
 ```
 Better Hayabusa/ChainSaw — Run Info
@@ -480,6 +595,14 @@ Targets (3):
 **Source of truth for option descriptions:** the per-tool Rust `options.rs` catalog. The same catalog drives form tooltips in the frontend (via `get_tool_metadata`), so the file and the UI cannot drift.
 
 **UI rendering:** the Job Detail "Run details" panel calls `get_run_info(run_id)` / `get_host_run_info(...)`, which returns a structured `RunInfo` value (parsed, not raw text). The panel renders it natively with copy-to-clipboard. The on-disk text file is the human-readable, portable artifact.
+
+## 9. Cross-cutting concerns
+
+- **Path validation**: on save and immediately before run, Rust checks exe + each target's input path + `root_output_dir` exist. Show inline warnings in the UI; do **not** block save (paths may exist later when the user actually has the files).
+- **Tool version detection**: when the user enters an executable path in a job form or in Settings, Rust runs `<exe> --version` once in the background. In the Settings page, the detected version is cached in `app.db.global_tools.version_string`. In job forms, the detected version is shown next to the path field but not persisted (a re-check happens whenever the path changes).
+- **Error handling**: any spawn or I/O error during a host execution transitions that host to `failed`, with the error written both to `stderr.log` and `job_run_hosts.error_message`. A run-level error (e.g., can't create the output directory) sets `job_runs.error_message`.
+- **Logging retention**: a global setting (default: keep all runs) lets users auto-delete run artifacts older than N days. Cleanup runs on project open.
+- **No telemetry, no auto-update in v1.**
 
 ## 9a. Tool acquisition and updates
 
@@ -542,14 +665,6 @@ Outbound HTTP is initiated by Rust (`reqwest`), not the Tauri HTTP plugin. Rust 
 
 All other hostnames are rejected before the request is made.
 
-## 9. Cross-cutting concerns
-
-- **Path validation**: on save and immediately before run, Rust checks exe + each target's input path + `root_output_dir` exist. Show inline warnings in the UI; do **not** block save (paths may exist later when the user actually has the files).
-- **Tool version detection**: when the user enters an executable path in a job form or in Settings, Rust runs `<exe> --version` once in the background. In the Settings page, the detected version is cached in `app.db.global_tools.version_string`. In job forms, the detected version is shown next to the path field but not persisted (a re-check happens whenever the path changes).
-- **Error handling**: any spawn or I/O error during a host execution transitions that host to `failed`, with the error written both to `stderr.log` and `job_run_hosts.error_message`. A run-level error (e.g., can't create the output directory) sets `job_runs.error_message`.
-- **Logging retention**: a global setting (default: keep all runs) lets users auto-delete run artifacts older than N days. Cleanup runs on project open.
-- **No telemetry, no auto-update in v1.**
-
 ## 10. Out of scope for v1
 
 - Cross-platform runtime (architecture is ready; build targets are not).
@@ -573,10 +688,23 @@ better-hayabusa-chainsaw/
 │   │   ├── components/                  # shadcn-svelte and app-specific components
 │   │   ├── ipc/                         # thin invoke() wrappers per Tauri command
 │   │   ├── generated/                   # ts-rs-generated TS types (do not edit)
+│   │   ├── help/                        # Markdown help content per page/component
+│   │   │   ├── pages/
+│   │   │   │   ├── home.md
+│   │   │   │   ├── project-dashboard.md
+│   │   │   │   ├── job-form.md
+│   │   │   │   └── ...
+│   │   │   └── sections/
+│   │   │       ├── targets.md
+│   │   │       └── ...
 │   │   ├── tools/
 │   │   │   ├── hayabusa_csv_timeline/Form.svelte
 │   │   │   ├── chainsaw_hunt/Form.svelte
 │   │   │   └── chainsaw_analyse_shimcache/Form.svelte
+│   │   ├── toolReference/               # ss64-style reference page components
+│   │   │   ├── ReferencePage.svelte     # the layout (overview, links, search, TOC, options list)
+│   │   │   ├── OptionCard.svelte
+│   │   │   └── SubcommandSection.svelte
 │   │   └── stores/
 │   └── app.html
 ├── src-tauri/
@@ -610,13 +738,19 @@ better-hayabusa-chainsaw/
 │       │   ├── sigma.rs                 # sigma rules fetch
 │       │   └── errors.rs                # user-facing error variants
 │       ├── tools/
-│       │   ├── registry.rs              # tool_type → impl
-│       │   ├── traits.rs                # Tool trait, OptionMetadata, RunInfo, etc.
-│       │   ├── hayabusa_csv_timeline/   # mod.rs + settings + defaults + options + command + output_paths
-│       │   ├── chainsaw_hunt/
-│       │   └── chainsaw_analyse_shimcache/
+│       │   ├── registry.rs              # tool_type → job-type impl
+│       │   ├── traits.rs                # Tool trait, OptionMetadata, ToolReference, RunInfo, etc.
+│       │   ├── references/              # per-executable reference catalogs (one per executable)
+│       │   │   ├── hayabusa.rs          # all hayabusa subcommands + all options + documented_version + links
+│       │   │   └── chainsaw.rs
+│       │   └── jobs/                    # per-(executable, subcommand) job modules
+│       │       ├── hayabusa_csv_timeline/   # mod.rs + settings + defaults + command + output_paths
+│       │       ├── chainsaw_hunt/
+│       │       └── chainsaw_analyse_shimcache/
 │       └── run_info/                    # RunInfo struct + text-file rendering
 ├── docs/superpowers/specs/
+├── CLAUDE.md                            # guide for future Claude Code sessions
+├── LICENSE                              # MIT
 ├── package.json
 ├── pnpm-lock.yaml
 └── README.md
@@ -624,4 +758,4 @@ better-hayabusa-chainsaw/
 
 ## 12. Open questions
 
-None at design time. Implementation-time decisions (NSIS branding details, exact shadcn-svelte component picks per page, log-viewer virtualization library) will be made during implementation.
+None at design time. Implementation-time decisions (exact shadcn-svelte component picks per page, log-viewer virtualization library, ts-rs vs specta tradeoffs, sqlx vs rusqlite if we hit threading-model pain) will be made during implementation.
