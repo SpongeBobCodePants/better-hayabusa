@@ -26,7 +26,7 @@
 
 <div class="mx-auto max-w-2xl space-y-6 p-8">
   <header>
-    <h1 class="text-3xl font-bold">Better Hayabusa/ChainSaw</h1>
+    <h1 class="text-3xl font-bold">Better Hayabusa</h1>
     <p class="mt-1 text-lg italic text-slate-600">Making your life suck less…</p>
   </header>
 

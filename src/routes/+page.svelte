@@ -5,7 +5,7 @@
 
 <div class="mx-auto max-w-3xl space-y-6 p-8">
   <header>
-    <h1 class="text-3xl font-bold">Better Hayabusa/ChainSaw</h1>
+    <h1 class="text-3xl font-bold">Better Hayabusa</h1>
     <p class="mt-2 text-slate-600">
       A graphical UI for the Hayabusa and Chainsaw command-line forensics tools.
       Organize your investigations as projects, configure tool runs as named jobs,

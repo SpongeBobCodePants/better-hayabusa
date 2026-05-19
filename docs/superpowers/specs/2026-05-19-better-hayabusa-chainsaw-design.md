@@ -1,4 +1,4 @@
-# Better Hayabusa/ChainSaw — Design
+# Better Hayabusa — Design
 
 **Date:** 2026-05-19
 **Status:** Draft for review
@@ -534,7 +534,7 @@ Two text files per run, written by Rust.
 **Per-host file** (`<project>/.bhc/runs/<run_id>/hosts/<host_id>/run-info.txt`): written at host start, finalized at host exit.
 
 ```
-Better Hayabusa/ChainSaw — Run Info
+Better Hayabusa — Run Info
 ====================================
 Run ID:        42
 Job:           "APT-29 sweep" (id=7, tool=hayabusa_csv_timeline)
@@ -577,7 +577,7 @@ Options used:
 **Run-level file** (`<project>/.bhc/runs/<run_id>/run-info.txt`): written when the run finishes.
 
 ```
-Better Hayabusa/ChainSaw — Run Info
+Better Hayabusa — Run Info
 ====================================
 Run ID:        42
 Job:           "APT-29 sweep" (id=7, tool=hayabusa_csv_timeline)

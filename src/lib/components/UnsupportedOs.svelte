@@ -7,7 +7,7 @@
   <div class="max-w-lg space-y-4 rounded-lg border bg-white p-8 text-center shadow-sm">
     <h1 class="text-2xl font-bold text-slate-900">Unsupported operating system</h1>
     <p class="text-slate-600">
-      Better Hayabusa/ChainSaw v1 supports Windows only. You're running
+      Better Hayabusa v1 supports Windows only. You're running
       <strong>{detectedOs}</strong>.
     </p>
     <p class="text-sm text-slate-500">

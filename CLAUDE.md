@@ -1,4 +1,4 @@
-# Better Hayabusa/ChainSaw
+# Better Hayabusa
 
 A local desktop application that acts as a graphical UI for the command-line forensics tools **Hayabusa** and **Chainsaw**. By Merciless Software — *making your life suck less*.
 
