@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getAppVersion } from '$lib/ipc/app';
-  import { goto } from '$app/navigation';
 
   let version = $state<string>('…');
 
@@ -15,10 +14,10 @@
   });
 </script>
 
-<button
-  class="w-full px-4 py-3 text-left text-xs text-slate-500 hover:bg-slate-100"
-  onclick={() => goto('/settings/about')}
+<a
+  href="/settings/about"
+  class="block w-full px-4 py-3 text-left text-xs text-slate-500 hover:bg-slate-100"
 >
   <div class="font-medium text-slate-700">Merciless Software</div>
   <div>v{version}</div>
-</button>
+</a>
