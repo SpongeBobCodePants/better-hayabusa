@@ -6,7 +6,6 @@ pnpm-debug.log*
 
 # Rust / Cargo
 src-tauri/target/
-src-tauri/Cargo.lock
 
 # Node
 node_modules/
