@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-tests:
+    name: Rust tests (windows-latest)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # ts-rs generates TS types as a side-effect of `cargo test`.
+      # CI must run it so the frontend build below has the generated bindings.
+      - name: cargo test
+        run: cargo test --locked
+
+  frontend-build:
+    name: Frontend build (ubuntu-latest)
+    runs-on: ubuntu-latest
+    # Frontend doesn't require Rust to compile its own bundle — the static
+    # adapter just emits HTML/JS/CSS. We seed generated/ with placeholders
+    # to satisfy TS imports without running cargo on every PR.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Stub the ts-rs generated types so `pnpm build` resolves imports
+      # without needing the Rust toolchain in this job.
+      - name: Stub generated types
+        run: |
+          mkdir -p src/lib/generated
+          echo 'export type AppVersion = { version: string };' > src/lib/generated/AppVersion.ts
+          echo 'export type Os = "Windows" | "Macos" | "Linux" | "Other";' > src/lib/generated/Os.ts
+
+      - run: pnpm build
