@@ -29,14 +29,13 @@ A local desktop application that acts as a graphical UI for the command-line for
 
 ## Running and building
 
-> Project is in design phase — these commands don't exist yet. Update this section when scaffolding lands.
+- `pnpm install` — install frontend deps (run once per clone, and after `pnpm-lock.yaml` changes)
+- `pnpm tauri dev` — dev mode (Rust + Vite + Svelte HMR, opens a window)
+- `cd src-tauri && cargo test` — Rust tests (also runs `ts-rs` type generation)
+- `pnpm tauri build --debug` — debug bundle (faster, includes debug symbols)
+- `pnpm tauri build` — release bundle (slower, used for distribution)
 
-Planned:
-- `pnpm install` — frontend deps
-- `pnpm tauri dev` — dev mode (Rust + Vite + Svelte HMR)
-- `pnpm tauri build` — portable Windows zip
-- `cd src-tauri && cargo test` — Rust tests
-- `pnpm test` — frontend tests
+> Frontend tests (Vitest) and E2E tests (Playwright) land in later milestones.
 
 ## License
 
