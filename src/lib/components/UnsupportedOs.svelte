@@ -13,13 +13,13 @@
     <p class="text-sm text-slate-500">
       Cross-platform support is planned. Watch the GitHub project for progress.
     </p>
-    <a
+    <Button
       href="https://github.com/MercilessSoftware/better-hayabusa-chainsaw/issues"
-      class="inline-block"
       target="_blank"
       rel="noreferrer"
+      variant="outline"
     >
-      <Button variant="outline">Open the issue tracker</Button>
-    </a>
+      Open the issue tracker
+    </Button>
   </div>
 </div>
