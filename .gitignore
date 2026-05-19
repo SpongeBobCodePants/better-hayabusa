@@ -22,7 +22,8 @@ vite.config.ts.timestamp-*
 src-tauri/gen/schemas
 
 # ts-rs generated types (regenerated on build)
-src/lib/generated/
+src/lib/generated/*
+!src/lib/generated/.gitkeep
 
 # Local env
 .env
