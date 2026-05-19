@@ -7,6 +7,7 @@ A local desktop application that acts as a graphical UI for the command-line for
 ## Where things live
 
 - **Design spec (source of truth):** [docs/superpowers/specs/2026-05-19-better-hayabusa-chainsaw-design.md](docs/superpowers/specs/2026-05-19-better-hayabusa-chainsaw-design.md). Read this first. Most "how does X work" questions are answered there.
+- **Backlog (deferred work):** [docs/superpowers/backlog.md](docs/superpowers/backlog.md). Items deferred from earlier milestones, organized by target milestone. **When drafting a new milestone's plan, read this first** and either fold items in or push them to a later section. When closing an item, delete the line.
 - **Frontend:** `src/` — SvelteKit + shadcn-svelte + Tailwind. View layer only.
 - **Backend (Rust):** `src-tauri/src/` — Tauri command handlers, process orchestration, SQLite, HTTP downloads, tool registry.
 - **Per-tool modules:** split into two layers — `src-tauri/src/tools/references/<executable>.rs` owns all option metadata for an executable (drives the reference page); `src-tauri/src/tools/jobs/<job_type>/` owns what's job-type-specific (settings, defaults, command builder, output paths). Frontend forms are at `src/lib/tools/<job_type>/Form.svelte`.
