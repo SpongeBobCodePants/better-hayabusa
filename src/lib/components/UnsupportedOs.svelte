@@ -14,7 +14,7 @@
       Cross-platform support is planned. Watch the GitHub project for progress.
     </p>
     <Button
-      href="https://github.com/MercilessSoftware/better-hayabusa-chainsaw/issues"
+      href="https://github.com/SpongeBobCodePants/better-hayabusa/issues"
       target="_blank"
       rel="noopener noreferrer"
       variant="outline"

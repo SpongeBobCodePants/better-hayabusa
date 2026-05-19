@@ -47,7 +47,7 @@
       <div>
         <span class="font-medium">Source:</span>
         <a
-          href="https://github.com/MercilessSoftware/better-hayabusa-chainsaw"
+          href="https://github.com/SpongeBobCodePants/better-hayabusa"
           target="_blank"
           rel="noopener noreferrer"
           class="text-blue-600 underline"

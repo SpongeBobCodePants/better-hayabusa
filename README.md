@@ -1,6 +1,6 @@
 # Better Hayabusa
 
-A local desktop application that acts as a graphical UI for the command-line forensics tools [Hayabusa](https://github.com/Yamato-Security/hayabusa) and [Chainsaw](https://github.com/WithSecureLabs/chainsaw). By [Merciless Software](https://github.com/MercilessSoftware) — *making your life suck less*.
+A local desktop application that acts as a graphical UI for the command-line forensics tools [Hayabusa](https://github.com/Yamato-Security/hayabusa) and [Chainsaw](https://github.com/WithSecureLabs/chainsaw). By [Merciless Software](https://github.com/SpongeBobCodePants) — *making your life suck less*.
 
 > **Status: Early development.** Milestone 1 (Foundation) is complete: Tauri shell, OS gate, SQLite-backed app state, sidebar shell, About page. Projects, jobs, runs, tool downloads, and the in-app CLI reference are not implemented yet. See [docs/superpowers/roadmap.md](docs/superpowers/roadmap.md) for what's planned and [the open Issues](../../issues) for current work.
 
