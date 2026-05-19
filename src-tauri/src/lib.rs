@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod db;
+pub mod paths;
 pub mod platform;
 pub mod types;
 
