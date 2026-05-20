@@ -100,33 +100,31 @@
 <div class="space-y-4">
   <Input bind:value={filter} placeholder="Filter projects..." class="max-w-sm" />
 
-  <Table>
+  <Table class="table-fixed">
     <TableHeader>
       <TableRow>
-        <TableHead>Name</TableHead>
-        <TableHead>Description</TableHead>
-        <TableHead>Path</TableHead>
-        <TableHead>Last modified</TableHead>
-        <TableHead>Actions</TableHead>
+        <TableHead class="w-[15%]">Name</TableHead>
+        <TableHead class="w-[25%]">Description</TableHead>
+        <TableHead class="w-[30%]">Path</TableHead>
+        <TableHead class="w-[15%]">Last modified</TableHead>
+        <TableHead class="w-[15%]">Actions</TableHead>
       </TableRow>
     </TableHeader>
     <TableBody>
       {#each filtered as p}
         <TableRow>
           <TableCell class="align-top font-medium">
-            <div class="line-clamp-3" title={p.name}>{p.name}</div>
+            <div class="line-clamp-3 break-words" title={p.name}>{p.name}</div>
           </TableCell>
-          <TableCell class="max-w-xs align-top text-slate-600">
+          <TableCell class="align-top text-slate-600">
             {#if p.description}
-              <div class="line-clamp-3" title={p.description}>{p.description}</div>
+              <div class="line-clamp-3 break-words" title={p.description}>{p.description}</div>
             {:else}
               <span class="text-slate-400">—</span>
             {/if}
           </TableCell>
-          <TableCell class="max-w-xs align-top text-xs text-slate-600">
-            <div class="line-clamp-3 break-all" title={p.path}>
-              <code>{p.path}</code>
-            </div>
+          <TableCell class="align-top text-xs text-slate-600">
+            <div class="line-clamp-3 break-all font-mono" title={p.path}>{p.path}</div>
           </TableCell>
           <TableCell class="whitespace-nowrap align-top">
             {p.last_modified ? formatDateSync(p.last_modified, tzMode) : '—'}
