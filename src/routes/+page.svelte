@@ -44,13 +44,13 @@
 <div class="mx-auto max-w-3xl space-y-6 p-8">
   <header>
     <h1 class="text-3xl font-bold">Better Hayabusa</h1>
+    <p class="mt-1 text-sm italic text-slate-500">
+      Making your life suck a little less...
+    </p>
     <p class="mt-2 text-slate-600">
       A graphical UI for Hayabusa and related tools (Chainsaw and Takajo).
       Organize your investigations as projects, configure tool runs as named
       jobs, and review run history in one place.
-    </p>
-    <p class="mt-2 text-sm italic text-slate-500">
-      Making your life suck a little less...
     </p>
   </header>
 
@@ -63,7 +63,7 @@
       <Button
         variant="outline"
         disabled={loaded && recents.length === 0}
-        href="/projects/"
+        onclick={() => goto('/projects/')}
       >
         Open project
       </Button>
