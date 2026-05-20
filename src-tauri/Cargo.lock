@@ -251,6 +251,7 @@ dependencies = [
  "tauri-plugin-os",
  "tempfile",
  "thiserror 1.0.69",
+ "time",
  "tokio",
  "tracing",
  "tracing-subscriber",
