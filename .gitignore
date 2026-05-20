@@ -21,10 +21,6 @@ vite.config.ts.timestamp-*
 # Tauri generated schemas (auto-completion for capabilities)
 src-tauri/gen/schemas
 
-# ts-rs generated types (regenerated on build)
-src/lib/generated/*
-!src/lib/generated/.gitkeep
-
 # Local env
 .env
 .env.local
