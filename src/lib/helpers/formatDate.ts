@@ -21,10 +21,20 @@ export function formatDateSync(isoUtc: string, mode: TimezoneMode): string {
     const iso = d.toISOString();
     return `${iso.slice(0, 10)} ${iso.slice(11, 19)} UTC`;
   }
-  // Local timezone via Intl
-  return new Intl.DateTimeFormat(undefined, {
+
+  const opts: Intl.DateTimeFormatOptions = {
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
     hour12: false,
-  }).format(d);
+  };
+  if (mode !== 'Local') {
+    opts.timeZone = mode;
+  }
+  try {
+    return new Intl.DateTimeFormat(undefined, opts).format(d);
+  } catch {
+    // Invalid timezone - fall back to Local-style format without a timeZone.
+    delete opts.timeZone;
+    return new Intl.DateTimeFormat(undefined, opts).format(d);
+  }
 }

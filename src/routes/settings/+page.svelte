@@ -9,6 +9,7 @@
     SelectItem,
     SelectTrigger,
   } from '$lib/components/ui/select';
+  import TimezonePicker from '$lib/components/TimezonePicker.svelte';
   import {
     getLaunchBehavior, setLaunchBehavior, type LaunchBehavior,
     getDefaultTimezone, setDefaultTimezone, type TimezoneMode,
@@ -23,11 +24,6 @@
   const launchLabels: Record<LaunchBehavior, string> = {
     last_project: 'Open last project',
     home_page: 'Open Home page',
-  };
-
-  const tzLabels: Record<TimezoneMode, string> = {
-    UTC: 'UTC',
-    Local: 'Local',
   };
 
   onMount(async () => {
@@ -45,7 +41,7 @@
   }
 
   async function onTzChange(v: string) {
-    tzMode = v as TimezoneMode;
+    tzMode = v;
     await setDefaultTimezone(tzMode);
   }
 
@@ -80,15 +76,9 @@
 
         <div class="space-y-2">
           <Label for="tz">Default timezone</Label>
-          <Select type="single" value={tzMode} onValueChange={onTzChange}>
-            <SelectTrigger id="tz" class="w-64">
-              {tzLabels[tzMode]}
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="UTC">UTC</SelectItem>
-              <SelectItem value="Local">Local</SelectItem>
-            </SelectContent>
-          </Select>
+          <div>
+            <TimezonePicker value={tzMode} onValueChange={onTzChange} />
+          </div>
           <p class="text-xs text-slate-500">
             All displayed timestamps use this. The DB always stores UTC.
           </p>

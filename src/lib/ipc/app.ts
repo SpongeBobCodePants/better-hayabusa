@@ -16,7 +16,9 @@ export async function setAppState(key: string, value: string): Promise<void> {
 // Typed convenience wrappers for the M2 settings.
 
 export type LaunchBehavior = 'last_project' | 'home_page';
-export type TimezoneMode = 'UTC' | 'Local';
+// Any IANA timezone name (e.g. 'America/New_York') plus the sentinels
+// 'UTC' and 'Local'. Validated on read in getDefaultTimezone.
+export type TimezoneMode = string;
 
 export async function getLaunchBehavior(): Promise<LaunchBehavior> {
   const v = await getAppState('launch_behavior');
@@ -29,7 +31,16 @@ export async function setLaunchBehavior(v: LaunchBehavior): Promise<void> {
 
 export async function getDefaultTimezone(): Promise<TimezoneMode> {
   const v = await getAppState('default_timezone');
-  return v === 'Local' ? 'Local' : 'UTC';
+  if (v === null) return 'UTC';
+  if (v === 'UTC' || v === 'Local') return v;
+  try {
+    const supported = Intl.supportedValuesOf('timeZone');
+    if (supported.includes(v)) return v;
+  } catch {
+    // Intl.supportedValuesOf not available - accept the stored value as-is.
+    return v;
+  }
+  return 'UTC';
 }
 
 export async function setDefaultTimezone(v: TimezoneMode): Promise<void> {
