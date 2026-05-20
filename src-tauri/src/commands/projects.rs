@@ -34,7 +34,7 @@ impl From<LifecycleError> for CommandError {
 pub fn create_project(
     state: State<'_, AppState>,
     // `folder_path` is the user-picked PARENT directory; the backend
-    // creates a timestamped `<name>__YYYY.MM.DD_HHMMSS/` subfolder inside.
+    // creates a timestamped `<name>_YYYY.MM.DD_HHMMSS/` subfolder inside.
     folder_path: String,
     name: String,
     description: Option<String>,
@@ -66,6 +66,36 @@ pub fn open_project(
 ) -> Result<LaunchResult, CommandError> {
     let folder = PathBuf::from(&folder_path);
     let app_conn = state.app_db.lock()?;
+
+    // Pre-flight: if the folder or project.db is gone, auto-clean the
+    // dead recents row and return Failed instead of bubbling
+    // NotAProject. Mirrors the sticky-session restore behavior in
+    // lifecycle::check_last_open_project so manual Open (chooser /
+    // Home recent click) gets the same self-healing treatment.
+    let project_db = lifecycle::project_db_path(&folder);
+    if !folder.exists() || !project_db.exists() {
+        let name = app_conn
+            .query_row(
+                "SELECT name FROM recent_projects WHERE path = ?1",
+                [&folder_path],
+                |r| r.get::<_, String>(0),
+            )
+            .ok()
+            .unwrap_or_else(|| String::from("(unknown)"));
+        let reason = if !folder.exists() {
+            "Folder no longer exists.".to_string()
+        } else {
+            "Project metadata (.bh/project.db) is missing.".to_string()
+        };
+        app_db::remove_recent_project(&app_conn, &folder_path)
+            .map_err(|e| CommandError::Db { message: e.to_string() })?;
+        clear_sticky_session(&app_conn)?;
+        return Ok(LaunchResult::Failed {
+            path: folder_path,
+            name,
+            reason,
+        });
+    }
 
     match open_p(&app_conn, &folder)? {
         OpenOutcome::Loaded { info, connection } => {

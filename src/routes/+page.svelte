@@ -33,14 +33,19 @@
     loaded = true;
   });
 
-  async function handleOpenRecent(path: string) {
-    const result = await openAndInstall(path);
+  async function handleOpenRecent(r: RecentProject) {
+    const result = await openAndInstall(r.path);
     if (result.kind === 'Loaded') {
       goto('/projects/current');
     } else if (result.kind === 'SchemaTooNew') {
       // SchemaTooNew handled by the sticky-fail/upgrade screen elsewhere.
       // For now, surface an alert. Improve in Task 25 once screen exists.
       alert(`Project requires app v${result.app_version}+; you have v${result.project_version}.`);
+    } else if (result.kind === 'Failed') {
+      // Dead recents row was auto-cleaned by the backend. Refresh the
+      // list and tell the user what happened.
+      alert(`Failed to open '${r.name}': ${result.reason}`);
+      refreshRecents();
     }
   }
 
@@ -109,7 +114,7 @@
             {#each recents.slice(0, count) as r}
               <TableRow
                 class="cursor-pointer hover:bg-slate-100"
-                onclick={() => handleOpenRecent(r.path)}
+                onclick={() => handleOpenRecent(r)}
               >
                 <TableCell class="font-medium">{r.name}</TableCell>
                 <TableCell class="text-slate-500">

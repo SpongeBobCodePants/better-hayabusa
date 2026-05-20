@@ -45,7 +45,7 @@ pub fn activity_log_path(folder: &Path) -> PathBuf { bh_dir(folder).join("activi
 
 /// Creates a new project. `parent_folder` is the user-picked parent
 /// directory; this function creates a timestamped subfolder
-/// `<parent_folder>/<name>__YYYY.MM.DD_HHMMSS/` (UTC) and places `.bh/`
+/// `<parent_folder>/<name>_YYYY.MM.DD_HHMMSS/` (UTC) and places `.bh/`
 /// inside it. Bootstraps `.bh/project.db`, inserts the `projects` row,
 /// writes the first activity log entry, and adds an entry to app.db's
 /// `recent_projects`.
@@ -81,7 +81,7 @@ pub fn create_project(
     let ts = OffsetDateTime::now_utc()
         .format(&ts_format)
         .expect("compile-time format description never fails for current_utc time");
-    let project_folder_name = format!("{name}__{ts}");
+    let project_folder_name = format!("{name}_{ts}");
     let project_folder = parent_folder.join(&project_folder_name);
 
     // 4. Create the timestamped project folder.

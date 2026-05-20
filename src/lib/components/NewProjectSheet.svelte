@@ -134,7 +134,7 @@
         </div>
         <p class="mt-1 text-xs text-slate-500">
           We'll create a new folder named
-          <code>&lt;your-project-name&gt;__&lt;timestamp&gt;</code>
+          <code>&lt;your-project-name&gt;_&lt;timestamp&gt;</code>
           inside this location. Source evidence and output paths can be set
           per-job to anywhere.
         </p>

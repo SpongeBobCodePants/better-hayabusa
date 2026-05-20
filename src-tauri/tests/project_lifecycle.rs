@@ -79,7 +79,7 @@ fn create_project_inside_existing_project_errors() {
     let project_tmp = tempdir().unwrap();
     let parent = project_tmp.path();
 
-    // First create: makes <parent>/First__ts/.bh/project.db
+    // First create: makes <parent>/First_ts/.bh/project.db
     let info = create_project(&app_conn, parent, "First", None).unwrap();
     let first_project_folder = PathBuf::from(&info.folder_path);
 
