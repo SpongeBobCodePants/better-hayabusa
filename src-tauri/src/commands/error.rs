@@ -32,8 +32,8 @@ impl From<std::io::Error> for CommandError {
     }
 }
 
-impl<E: std::error::Error> From<std::sync::PoisonError<E>> for CommandError {
-    fn from(e: std::sync::PoisonError<E>) -> Self {
+impl<T> From<std::sync::PoisonError<T>> for CommandError {
+    fn from(e: std::sync::PoisonError<T>) -> Self {
         CommandError::Internal { message: format!("mutex poisoned: {e}") }
     }
 }
