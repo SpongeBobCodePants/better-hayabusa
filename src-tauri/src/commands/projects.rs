@@ -202,9 +202,25 @@ pub fn list_all_projects(state: State<'_, AppState>) -> Result<Vec<RecentProject
             });
         let project_db = lifecycle::project_db_path(folder);
         let folder_exists = project_db.exists();
+        let description = if folder_exists {
+            rusqlite::Connection::open(&project_db)
+                .ok()
+                .and_then(|conn| {
+                    conn.query_row(
+                        "SELECT description FROM projects LIMIT 1",
+                        [],
+                        |r| r.get::<_, Option<String>>(0),
+                    )
+                    .ok()
+                })
+                .flatten()
+        } else {
+            None
+        };
         out.push(RecentProjectListEntry {
             path,
             name,
+            description,
             last_opened_at,
             last_modified,
             folder_exists,

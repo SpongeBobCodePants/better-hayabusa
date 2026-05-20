@@ -104,24 +104,34 @@
     <TableHeader>
       <TableRow>
         <TableHead>Name</TableHead>
+        <TableHead>Description</TableHead>
         <TableHead>Path</TableHead>
-        <TableHead>Last opened</TableHead>
         <TableHead>Last modified</TableHead>
-        <TableHead class="text-right">Actions</TableHead>
+        <TableHead>Actions</TableHead>
       </TableRow>
     </TableHeader>
     <TableBody>
       {#each filtered as p}
         <TableRow>
-          <TableCell class="font-medium">{p.name}</TableCell>
-          <TableCell class="max-w-xs break-all text-xs text-slate-600">
-            <code>{p.path}</code>
+          <TableCell class="align-top font-medium">
+            <div class="line-clamp-3" title={p.name}>{p.name}</div>
           </TableCell>
-          <TableCell>{formatDateSync(p.last_opened_at, tzMode)}</TableCell>
-          <TableCell>
+          <TableCell class="max-w-xs align-top text-slate-600">
+            {#if p.description}
+              <div class="line-clamp-3" title={p.description}>{p.description}</div>
+            {:else}
+              <span class="text-slate-400">—</span>
+            {/if}
+          </TableCell>
+          <TableCell class="max-w-xs align-top text-xs text-slate-600">
+            <div class="line-clamp-3 break-all" title={p.path}>
+              <code>{p.path}</code>
+            </div>
+          </TableCell>
+          <TableCell class="whitespace-nowrap align-top">
             {p.last_modified ? formatDateSync(p.last_modified, tzMode) : '—'}
           </TableCell>
-          <TableCell class="space-x-2 text-right">
+          <TableCell class="space-x-2 whitespace-nowrap align-top">
             <Button size="sm" onclick={() => handleOpen(p)}>Open</Button>
             <Button
               size="sm"
