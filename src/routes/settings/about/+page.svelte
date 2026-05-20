@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { getAppVersion } from '$lib/ipc/app';
   import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+  import { REPO_URL } from '$lib/constants';
 
   let version = $state<string>('…');
 
@@ -47,7 +48,7 @@
       <div>
         <span class="font-medium">Source:</span>
         <a
-          href="https://github.com/SpongeBobCodePants/better-hayabusa"
+          href={REPO_URL}
           target="_blank"
           rel="noopener noreferrer"
           class="text-blue-600 underline"
