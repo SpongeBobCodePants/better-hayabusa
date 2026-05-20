@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" role="img" aria-labelledby="title desc">
+  <title id="title">No projects empty-state illustration</title>
+  <desc id="desc">A relaxed analyst in a chair with an empty folder and scattered task cards, suggesting it is time to start a project.</desc>
+  <defs>
+    <linearGradient id="wall" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset="1" stop-color="#e2e8f0"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#172033"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#0f172a" flood-opacity=".16"/>
+    </filter>
+  </defs>
+
+  <rect width="800" height="480" fill="url(#wall)"/>
+  <ellipse cx="400" cy="417" rx="268" ry="35" fill="#cbd5e1" opacity=".55"/>
+
+  <g filter="url(#soft-shadow)">
+    <rect x="258" y="78" width="284" height="176" rx="18" fill="#1e293b"/>
+    <rect x="276" y="96" width="248" height="122" rx="10" fill="url(#screen)"/>
+    <path d="M326 155h148" stroke="#38bdf8" stroke-width="9" stroke-linecap="round" opacity=".9"/>
+    <path d="M354 184h92" stroke="#22c55e" stroke-width="9" stroke-linecap="round" opacity=".85"/>
+    <circle cx="494" cy="128" r="10" fill="#f97316"/>
+    <path d="M374 254h52l15 68h-82z" fill="#475569"/>
+    <rect x="331" y="318" width="138" height="16" rx="8" fill="#334155"/>
+  </g>
+
+  <g transform="translate(196 222)">
+    <path d="M77 163c-29-6-47-23-49-52-2-32 19-62 50-68 37-8 74 15 85 51 10 33-8 68-39 82-15 7-31 5-47-13z" fill="#334155"/>
+    <path d="M37 179h205" stroke="#475569" stroke-width="18" stroke-linecap="round"/>
+    <circle cx="64" cy="207" r="19" fill="#1e293b"/>
+    <circle cx="212" cy="207" r="19" fill="#1e293b"/>
+    <path d="M121 25c18 0 33 15 33 33 0 19-15 34-33 34s-33-15-33-34c0-18 15-33 33-33z" fill="#f2c49b"/>
+    <path d="M91 47c9-31 55-35 72-8 4 6 5 13 4 21-20-8-44-5-76-13z" fill="#111827"/>
+    <path d="M84 102c26-17 78-14 101 12l-18 54c-30 11-67 8-101-7z" fill="#0ea5e9"/>
+    <path d="M82 115c-28 21-40 42-36 63 3 14 21 17 31 7l39-37" fill="none" stroke="#f2c49b" stroke-width="18" stroke-linecap="round"/>
+    <path d="M179 119c25 18 41 36 51 56" fill="none" stroke="#f2c49b" stroke-width="18" stroke-linecap="round"/>
+    <path d="M104 165c-18 22-25 42-21 61" fill="none" stroke="#111827" stroke-width="22" stroke-linecap="round"/>
+    <path d="M151 169c30 15 56 25 79 30" fill="none" stroke="#111827" stroke-width="22" stroke-linecap="round"/>
+    <path d="M63 238h52" stroke="#ef4444" stroke-width="16" stroke-linecap="round"/>
+    <path d="M220 209h55" stroke="#ef4444" stroke-width="16" stroke-linecap="round"/>
+  </g>
+
+  <g filter="url(#soft-shadow)">
+    <path d="M543 305h119c12 0 22 10 22 22v56c0 12-10 22-22 22H543c-12 0-22-10-22-22v-56c0-12 10-22 22-22z" fill="#f8fafc"/>
+    <path d="M543 305h50l19 22h72" fill="#facc15"/>
+    <path d="M552 354h102" stroke="#94a3b8" stroke-width="8" stroke-linecap="round"/>
+    <path d="M552 378h64" stroke="#cbd5e1" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="653" cy="375" r="16" fill="#22c55e"/>
+  </g>
+
+  <g opacity=".88">
+    <rect x="82" y="298" width="104" height="68" rx="12" fill="#ffffff"/>
+    <path d="M104 324h54M104 347h34" stroke="#94a3b8" stroke-width="8" stroke-linecap="round"/>
+    <rect x="603" y="108" width="90" height="58" rx="12" fill="#ffffff"/>
+    <path d="M623 135h50M623 154h28" stroke="#94a3b8" stroke-width="7" stroke-linecap="round"/>
+    <rect x="112" y="102" width="86" height="58" rx="12" fill="#ffffff"/>
+    <path d="M132 128h46M132 147h25" stroke="#94a3b8" stroke-width="7" stroke-linecap="round"/>
+  </g>
+</svg>
