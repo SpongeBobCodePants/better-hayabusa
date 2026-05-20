@@ -108,5 +108,5 @@ If you skip this, GitHub will reject the push with `GH007: Your push would publi
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+AGPL-3.0-or-later. See [LICENSE](LICENSE).
 © 2026 Merciless Software.

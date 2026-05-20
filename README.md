@@ -71,4 +71,5 @@ This is a small project still finding its shape. If you're interested in contrib
 
 ## License
 
-[MIT](LICENSE) © 2026 Merciless Software.
+AGPL-3.0-or-later. See [LICENSE](LICENSE).
+© 2026 Merciless Software.
