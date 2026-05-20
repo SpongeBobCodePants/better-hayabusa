@@ -67,11 +67,13 @@ pub fn open_project(
     let folder = PathBuf::from(&folder_path);
     let app_conn = state.app_db.lock()?;
 
-    // Pre-flight: if the folder or project.db is gone, auto-clean the
-    // dead recents row and return Failed instead of bubbling
-    // NotAProject. Mirrors the sticky-session restore behavior in
-    // lifecycle::check_last_open_project so manual Open (chooser /
-    // Home recent click) gets the same self-healing treatment.
+    // Pre-flight: if the folder or project.db is gone, return Missing
+    // instead of bubbling NotAProject. We deliberately do NOT auto-clean
+    // the recents row here — the frontend prompts the user before
+    // removing it. The sticky-restore path
+    // (lifecycle::check_last_open_project) keeps its existing auto-clean
+    // behavior; that one fires at app boot when the user didn't pick
+    // anything, so the takeover UX is appropriate there.
     let project_db = lifecycle::project_db_path(&folder);
     if !folder.exists() || !project_db.exists() {
         let name = app_conn
@@ -87,10 +89,8 @@ pub fn open_project(
         } else {
             "Project metadata (.bh/project.db) is missing.".to_string()
         };
-        app_db::remove_recent_project(&app_conn, &folder_path)
-            .map_err(|e| CommandError::Db { message: e.to_string() })?;
-        clear_sticky_session(&app_conn)?;
-        return Ok(LaunchResult::Failed {
+        // Don't auto-clean: let the frontend prompt the user.
+        return Ok(LaunchResult::Missing {
             path: folder_path,
             name,
             reason,
@@ -190,7 +190,8 @@ pub fn list_all_projects(state: State<'_, AppState>) -> Result<Vec<RecentProject
 
     let mut out = Vec::with_capacity(rows.len());
     for (path, name, last_opened_at) in rows {
-        let log = std::path::Path::new(&path).join(".bh").join("activity.log");
+        let folder = std::path::Path::new(&path);
+        let log = folder.join(".bh").join("activity.log");
         let last_modified = std::fs::metadata(&log)
             .ok()
             .and_then(|m| m.modified().ok())
@@ -199,7 +200,15 @@ pub fn list_all_projects(state: State<'_, AppState>) -> Result<Vec<RecentProject
                 use time::format_description::well_known::Rfc3339;
                 OffsetDateTime::from(t).format(&Rfc3339).ok()
             });
-        out.push(RecentProjectListEntry { path, name, last_opened_at, last_modified });
+        let project_db = lifecycle::project_db_path(folder);
+        let folder_exists = project_db.exists();
+        out.push(RecentProjectListEntry {
+            path,
+            name,
+            last_opened_at,
+            last_modified,
+            folder_exists,
+        });
     }
     Ok(out)
 }

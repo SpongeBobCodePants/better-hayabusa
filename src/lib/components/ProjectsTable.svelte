@@ -10,10 +10,11 @@
     TableHeader,
     TableRow,
   } from '$lib/components/ui/table';
-  import { deleteProject as ipcDelete } from '$lib/ipc/projects';
+  import { deleteProject as ipcDelete, removeRecentProject } from '$lib/ipc/projects';
   import { openAndInstall } from '$lib/stores/currentProject';
   import { formatDateSync, type TimezoneMode } from '$lib/helpers/formatDate';
   import ConfirmDeleteProject from './ConfirmDeleteProject.svelte';
+  import ConfirmRemoveStaleRecent from './ConfirmRemoveStaleRecent.svelte';
   import type { RecentProjectListEntry } from '$lib/generated/RecentProjectListEntry';
 
   type Props = {
@@ -26,6 +27,8 @@
   let filter = $state('');
   let confirmOpen = $state(false);
   let toDelete = $state<RecentProjectListEntry | null>(null);
+  let stalePromptOpen = $state(false);
+  let staleEntry = $state<{ path: string; name: string; reason: string } | null>(null);
 
   let filtered = $derived(
     filter.trim() === ''
@@ -42,13 +45,40 @@
       goto('/projects/current');
     } else if (result.kind === 'SchemaTooNew') {
       alert(`'${p.name}' requires app v${result.app_version}+; you have v${result.project_version}.`);
+    } else if (result.kind === 'Missing') {
+      staleEntry = { path: result.path, name: result.name, reason: result.reason };
+      stalePromptOpen = true;
     } else if (result.kind === 'Failed') {
+      // Sticky-restore branch — not expected here, but be defensive.
       alert(`Failed to open '${p.name}': ${result.reason}`);
       onchange?.();
     }
   }
 
-  function requestDelete(p: RecentProjectListEntry) {
+  async function confirmRemoveStale() {
+    if (!staleEntry) return;
+    try {
+      await removeRecentProject(staleEntry.path);
+      onchange?.();
+    } finally {
+      staleEntry = null;
+      stalePromptOpen = false;
+    }
+  }
+
+  async function requestDelete(p: RecentProjectListEntry) {
+    if (!p.folder_exists) {
+      // Folder is gone; skip the scary confirm dialog and just remove
+      // the recents row. ipcDelete tolerates missing folders.
+      try {
+        await ipcDelete(p.path);
+      } catch (e) {
+        alert(`Remove failed: ${JSON.stringify(e)}`);
+        return;
+      }
+      onchange?.();
+      return;
+    }
     toDelete = p;
     confirmOpen = true;
   }
@@ -114,5 +144,15 @@
     name={toDelete.name}
     path={toDelete.path}
     onconfirm={confirmDelete}
+  />
+{/if}
+
+{#if staleEntry}
+  <ConfirmRemoveStaleRecent
+    bind:open={stalePromptOpen}
+    name={staleEntry.name}
+    path={staleEntry.path}
+    reason={staleEntry.reason}
+    onconfirm={confirmRemoveStale}
   />
 {/if}

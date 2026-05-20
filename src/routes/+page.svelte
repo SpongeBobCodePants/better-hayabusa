@@ -11,11 +11,12 @@
     TableHeader,
     TableRow,
   } from '$lib/components/ui/table';
-  import { listRecentProjects } from '$lib/ipc/projects';
+  import { listRecentProjects, removeRecentProject } from '$lib/ipc/projects';
   import { openAndInstall } from '$lib/stores/currentProject';
   import { formatDateSync } from '$lib/helpers/formatDate';
   import { getDefaultTimezone, getRecentProjectsCount, type TimezoneMode } from '$lib/ipc/app';
   import NewProjectSheet from '$lib/components/NewProjectSheet.svelte';
+  import ConfirmRemoveStaleRecent from '$lib/components/ConfirmRemoveStaleRecent.svelte';
   import type { RecentProject } from '$lib/generated/RecentProject';
 
   let recents = $state<RecentProject[]>([]);
@@ -23,6 +24,8 @@
   let count = $state<number>(5);
   let loaded = $state(false);
   let newSheetOpen = $state(false);
+  let stalePromptOpen = $state(false);
+  let staleEntry = $state<{ path: string; name: string; reason: string } | null>(null);
 
   onMount(async () => {
     [recents, tzMode, count] = await Promise.all([
@@ -41,11 +44,25 @@
       // SchemaTooNew handled by the sticky-fail/upgrade screen elsewhere.
       // For now, surface an alert. Improve in Task 25 once screen exists.
       alert(`Project requires app v${result.app_version}+; you have v${result.project_version}.`);
+    } else if (result.kind === 'Missing') {
+      // Folder is gone — prompt the user before removing the recents row.
+      staleEntry = { path: result.path, name: result.name, reason: result.reason };
+      stalePromptOpen = true;
     } else if (result.kind === 'Failed') {
-      // Dead recents row was auto-cleaned by the backend. Refresh the
-      // list and tell the user what happened.
+      // Sticky-restore branch — not expected here, but be defensive.
       alert(`Failed to open '${r.name}': ${result.reason}`);
       refreshRecents();
+    }
+  }
+
+  async function confirmRemoveStale() {
+    if (!staleEntry) return;
+    try {
+      await removeRecentProject(staleEntry.path);
+      refreshRecents();
+    } finally {
+      staleEntry = null;
+      stalePromptOpen = false;
     }
   }
 
@@ -130,3 +147,13 @@
 </div>
 
 <NewProjectSheet bind:open={newSheetOpen} oncreate={refreshRecents} />
+
+{#if staleEntry}
+  <ConfirmRemoveStaleRecent
+    bind:open={stalePromptOpen}
+    name={staleEntry.name}
+    path={staleEntry.path}
+    reason={staleEntry.reason}
+    onconfirm={confirmRemoveStale}
+  />
+{/if}

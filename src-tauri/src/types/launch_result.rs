@@ -23,6 +23,15 @@ pub enum LaunchResult {
         reason: String,
     },
 
+    /// Manual open found the project folder or .bh/project.db missing.
+    /// The recents row was NOT cleaned — the frontend prompts the user
+    /// before removing it.
+    Missing {
+        path: String,
+        name: String,
+        reason: String,
+    },
+
     /// `app_schema_version` of the project is newer than the app's.
     /// Frontend shows the schema-mismatch takeover screen.
     SchemaTooNew {
