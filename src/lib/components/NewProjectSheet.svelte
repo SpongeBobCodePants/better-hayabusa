@@ -15,6 +15,7 @@
     SheetTitle,
   } from '$lib/components/ui/sheet';
   import { createAndInstall, openAndInstall } from '$lib/stores/currentProject';
+  import { validateProjectName } from '$lib/helpers/validateProjectName';
   import type { CommandError } from '$lib/generated/CommandError';
 
   type Props = {
@@ -29,6 +30,12 @@
   let busy = $state(false);
   let error = $state<string | null>(null);
   let conflictPath = $state<string | null>(null);
+
+  // Live name validation. Returns null when the input is empty so the
+  // user doesn't see a "Name cannot be empty" error on the initial empty
+  // state — only when they've typed something invalid. The Create button
+  // is still disabled by the existing folder/name-trim guard below.
+  let nameError = $derived(name.trim() === '' ? null : validateProjectName(name));
 
   function reset() {
     name = '';
@@ -52,6 +59,10 @@
       error = 'Name and folder are required.';
       return;
     }
+    if (nameError) {
+      error = nameError;
+      return;
+    }
     busy = true;
     error = null;
     conflictPath = null;
@@ -65,6 +76,8 @@
       const err = e as CommandError;
       if (err.kind === 'AlreadyExists') {
         conflictPath = err.path;
+      } else if (err.kind === 'InvalidName') {
+        error = err.reason;
       } else if (err.kind === 'Io') {
         error = `I/O error: ${err.message}`;
       } else if (err.kind === 'Db') {
@@ -108,6 +121,9 @@
       <div>
         <Label for="name">Project name</Label>
         <Input id="name" bind:value={name} placeholder="APT-29 sweep" />
+        {#if nameError}
+          <p class="mt-1 text-xs text-red-600">{nameError}</p>
+        {/if}
       </div>
 
       <div>
@@ -152,7 +168,7 @@
 
     <SheetFooter class="flex gap-2">
       <Button variant="outline" onclick={() => { open = false; reset(); }}>Cancel</Button>
-      <Button onclick={handleCreate} disabled={busy}>
+      <Button onclick={handleCreate} disabled={busy || nameError !== null}>
         {busy ? 'Creating...' : 'Create'}
       </Button>
     </SheetFooter>

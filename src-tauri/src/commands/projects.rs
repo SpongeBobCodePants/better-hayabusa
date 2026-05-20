@@ -19,6 +19,7 @@ impl From<LifecycleError> for CommandError {
             LifecycleError::AlreadyExists { path } => CommandError::AlreadyExists { path },
             LifecycleError::NotAProject { path } => CommandError::NotAProject { path },
             LifecycleError::NotFound { path } => CommandError::NotFound { path },
+            LifecycleError::InvalidName { reason } => CommandError::InvalidName { reason },
             LifecycleError::Io(e) => CommandError::Io { message: e.to_string() },
             LifecycleError::Sql(e) => CommandError::Db { message: e.to_string() },
             LifecycleError::ProjectDb(e) => CommandError::Db { message: e.to_string() },

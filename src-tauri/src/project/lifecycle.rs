@@ -11,6 +11,7 @@ use crate::db::{app_db, project_db};
 use crate::db::migrations::CURRENT_PROJECT_SCHEMA_VERSION;
 use crate::project::activity_log::{append_event, ActivityEvent};
 use crate::project::conflict::{check_folder, ConflictCheckError, FolderState};
+use crate::project::name::validate_project_name;
 use crate::types::{LaunchResult, Project, ProjectInfo};
 
 #[derive(Debug, Error)]
@@ -21,6 +22,8 @@ pub enum LifecycleError {
     NotAProject { path: String },
     #[error("folder not found: {path}")]
     NotFound { path: String },
+    #[error("invalid name: {reason}")]
+    InvalidName { reason: String },
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
     #[error("sqlite: {0}")]
@@ -56,7 +59,12 @@ pub fn create_project(
     name: &str,
     description: Option<&str>,
 ) -> Result<ProjectInfo, LifecycleError> {
-    // 1. Conflict check on the parent. If the parent itself is already a
+    // 1. Validate the name against Windows filename rules (re-validates
+    //    what the frontend already checked; never trust the frontend).
+    validate_project_name(name)
+        .map_err(|reason| LifecycleError::InvalidName { reason })?;
+
+    // 2. Conflict check on the parent. If the parent itself is already a
     //    project, the user is trying to create a project inside another
     //    project — reject the same way as before.
     match check_folder(parent_folder)? {
@@ -68,7 +76,7 @@ pub fn create_project(
         }
     }
 
-    // 2. Compute timestamped subfolder name.
+    // 3. Compute timestamped subfolder name.
     let ts_format = format_description!("[year].[month].[day]_[hour][minute][second]");
     let ts = OffsetDateTime::now_utc()
         .format(&ts_format)
@@ -76,16 +84,16 @@ pub fn create_project(
     let project_folder_name = format!("{name}__{ts}");
     let project_folder = parent_folder.join(&project_folder_name);
 
-    // 3. Create the timestamped project folder.
+    // 4. Create the timestamped project folder.
     fs::create_dir_all(&project_folder)?;
 
-    // 4. Create .bh/ directory inside the project folder.
+    // 5. Create .bh/ directory inside the project folder.
     fs::create_dir_all(bh_dir(&project_folder))?;
 
-    // 5. Open project.db (runs migrations).
+    // 6. Open project.db (runs migrations).
     let project_conn = project_db::open_or_create(&project_db_path(&project_folder))?;
 
-    // 6. Insert projects row.
+    // 7. Insert projects row.
     let now = OffsetDateTime::now_utc()
         .format(&Rfc3339)
         .expect("RFC3339 format never fails for current_utc time");
@@ -94,7 +102,7 @@ pub fn create_project(
         rusqlite::params![name, description, now, CURRENT_PROJECT_SCHEMA_VERSION],
     )?;
 
-    // 7. Read the inserted row.
+    // 8. Read the inserted row.
     let project: Project = project_conn.query_row(
         "SELECT id, name, description, created_at, app_schema_version FROM projects LIMIT 1",
         [],
@@ -107,13 +115,13 @@ pub fn create_project(
         }),
     )?;
 
-    // 8. Activity log.
+    // 9. Activity log.
     append_event(
         &activity_log_path(&project_folder),
         ActivityEvent::ProjectOpened { name: name.to_string() },
     )?;
 
-    // 9. Upsert recent_projects with the timestamped subfolder path.
+    // 10. Upsert recent_projects with the timestamped subfolder path.
     let folder_str = project_folder.display().to_string();
     app_db::upsert_recent_project(app_conn, &folder_str, name)?;
 

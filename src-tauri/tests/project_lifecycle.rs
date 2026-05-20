@@ -61,6 +61,17 @@ fn create_project_writes_db_and_log_and_recents_row() {
 }
 
 #[test]
+fn create_project_rejects_invalid_name() {
+    let app_tmp = tempdir().unwrap();
+    let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
+    let project_tmp = tempdir().unwrap();
+
+    let result = create_project(&app_conn, project_tmp.path(), "bad/name", None);
+    use bhc_lib::project::lifecycle::LifecycleError;
+    assert!(matches!(result, Err(LifecycleError::InvalidName { .. })));
+}
+
+#[test]
 fn create_project_inside_existing_project_errors() {
     let app_tmp = tempdir().unwrap();
     let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
