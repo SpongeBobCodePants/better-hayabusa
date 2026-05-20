@@ -2,10 +2,10 @@ use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FolderState {
-    /// Folder is empty, or has unrelated files but no `.bhc/project.db`.
+    /// Folder is empty, or has unrelated files but no `.bh/project.db`.
     /// Safe target for `create_project`.
     Eligible,
-    /// Folder already has `.bhc/project.db`. `create_project` would error;
+    /// Folder already has `.bh/project.db`. `create_project` would error;
     /// caller should offer "Open it instead?" UX.
     ExistingProject,
 }
@@ -32,7 +32,7 @@ pub fn check_folder(folder: &Path) -> Result<FolderState, ConflictCheckError> {
         return Err(ConflictCheckError::NotADirectory(folder.display().to_string()));
     }
 
-    let project_db = folder.join(".bhc").join("project.db");
+    let project_db = folder.join(".bh").join("project.db");
     if project_db.exists() {
         Ok(FolderState::ExistingProject)
     } else {

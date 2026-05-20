@@ -111,15 +111,16 @@
       </div>
 
       <div>
-        <Label for="folder">Default folder</Label>
+        <Label for="folder">Location</Label>
         <div class="flex gap-2">
-          <Input id="folder" bind:value={folder} readonly placeholder="Click Browse to pick a folder" />
+          <Input id="folder" bind:value={folder} readonly placeholder="Click Browse to pick the parent folder" />
           <Button variant="outline" onclick={pickFolder}>Browse</Button>
         </div>
         <p class="mt-1 text-xs text-slate-500">
-          Source evidence and output paths can be set per-job to anywhere — this
-          is just where the project metadata and logs live, and the default
-          starting point for new jobs.
+          We'll create a new folder named
+          <code>&lt;your-project-name&gt;__&lt;timestamp&gt;</code>
+          inside this location. Source evidence and output paths can be set
+          per-job to anywhere.
         </p>
       </div>
 

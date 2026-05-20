@@ -5,6 +5,7 @@ use rusqlite::{Connection, OptionalExtension};
 use thiserror::Error;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
+use time::macros::format_description;
 
 use crate::db::{app_db, project_db};
 use crate::db::migrations::CURRENT_PROJECT_SCHEMA_VERSION;
@@ -34,40 +35,57 @@ pub enum LifecycleError {
     Conflict(#[from] ConflictCheckError),
 }
 
-/// Path helpers — keep `.bhc/` layout in one place.
-pub fn bhc_dir(folder: &Path) -> PathBuf { folder.join(".bhc") }
-pub fn project_db_path(folder: &Path) -> PathBuf { bhc_dir(folder).join("project.db") }
-pub fn activity_log_path(folder: &Path) -> PathBuf { bhc_dir(folder).join("activity.log") }
+/// Path helpers — keep `.bh/` layout in one place.
+pub fn bh_dir(folder: &Path) -> PathBuf { folder.join(".bh") }
+pub fn project_db_path(folder: &Path) -> PathBuf { bh_dir(folder).join("project.db") }
+pub fn activity_log_path(folder: &Path) -> PathBuf { bh_dir(folder).join("activity.log") }
 
-/// Creates a new project at `folder`. Bootstraps `.bhc/project.db`,
-/// inserts the `projects` row, writes the first activity log entry, and
-/// adds an entry to app.db's `recent_projects`.
+/// Creates a new project. `parent_folder` is the user-picked parent
+/// directory; this function creates a timestamped subfolder
+/// `<parent_folder>/<name>__YYYY.MM.DD_HHMMSS/` (UTC) and places `.bh/`
+/// inside it. Bootstraps `.bh/project.db`, inserts the `projects` row,
+/// writes the first activity log entry, and adds an entry to app.db's
+/// `recent_projects`.
 ///
-/// Returns the loaded `ProjectInfo` ready for the caller to install as
-/// the current project.
+/// Returns the loaded `ProjectInfo` with `folder_path` set to the
+/// timestamped subfolder (not the parent) — ready for the caller to
+/// install as the current project.
 pub fn create_project(
     app_conn: &Connection,
-    folder: &Path,
+    parent_folder: &Path,
     name: &str,
     description: Option<&str>,
 ) -> Result<ProjectInfo, LifecycleError> {
-    // 1. Conflict check.
-    match check_folder(folder)? {
+    // 1. Conflict check on the parent. If the parent itself is already a
+    //    project, the user is trying to create a project inside another
+    //    project — reject the same way as before.
+    match check_folder(parent_folder)? {
         FolderState::Eligible => {}
         FolderState::ExistingProject => {
             return Err(LifecycleError::AlreadyExists {
-                path: folder.display().to_string(),
+                path: parent_folder.display().to_string(),
             });
         }
     }
 
-    // 2. Create .bhc/ directory.
-    fs::create_dir_all(bhc_dir(folder))?;
+    // 2. Compute timestamped subfolder name.
+    let ts_format = format_description!("[year].[month].[day]_[hour][minute][second]");
+    let ts = OffsetDateTime::now_utc()
+        .format(&ts_format)
+        .expect("compile-time format description never fails for current_utc time");
+    let project_folder_name = format!("{name}__{ts}");
+    let project_folder = parent_folder.join(&project_folder_name);
 
-    // 3. Open project.db (runs migrations).
-    let project_conn = project_db::open_or_create(&project_db_path(folder))?;
+    // 3. Create the timestamped project folder.
+    fs::create_dir_all(&project_folder)?;
 
-    // 4. Insert projects row.
+    // 4. Create .bh/ directory inside the project folder.
+    fs::create_dir_all(bh_dir(&project_folder))?;
+
+    // 5. Open project.db (runs migrations).
+    let project_conn = project_db::open_or_create(&project_db_path(&project_folder))?;
+
+    // 6. Insert projects row.
     let now = OffsetDateTime::now_utc()
         .format(&Rfc3339)
         .expect("RFC3339 format never fails for current_utc time");
@@ -76,7 +94,7 @@ pub fn create_project(
         rusqlite::params![name, description, now, CURRENT_PROJECT_SCHEMA_VERSION],
     )?;
 
-    // 5. Read the inserted row.
+    // 7. Read the inserted row.
     let project: Project = project_conn.query_row(
         "SELECT id, name, description, created_at, app_schema_version FROM projects LIMIT 1",
         [],
@@ -89,14 +107,14 @@ pub fn create_project(
         }),
     )?;
 
-    // 6. Activity log.
+    // 8. Activity log.
     append_event(
-        &activity_log_path(folder),
+        &activity_log_path(&project_folder),
         ActivityEvent::ProjectOpened { name: name.to_string() },
     )?;
 
-    // 7. Upsert recent_projects.
-    let folder_str = folder.display().to_string();
+    // 9. Upsert recent_projects with the timestamped subfolder path.
+    let folder_str = project_folder.display().to_string();
     app_db::upsert_recent_project(app_conn, &folder_str, name)?;
 
     Ok(ProjectInfo { project, folder_path: folder_str })
@@ -118,7 +136,7 @@ pub enum OpenOutcome {
     },
 }
 
-/// Opens an existing project. Validates that `.bhc/project.db` exists,
+/// Opens an existing project. Validates that `.bh/project.db` exists,
 /// runs forward migrations (no-op if up to date), checks the project's
 /// stored schema version against the app's, logs the open event, bumps
 /// `recent_projects.last_opened_at`.
@@ -246,7 +264,7 @@ pub fn check_last_open_project(app_conn: &Connection) -> Result<LaunchResult, Li
         return Ok(LaunchResult::Failed {
             path: last_path,
             name,
-            reason: "Project metadata (.bhc/project.db) is missing.".to_string(),
+            reason: "Project metadata (.bh/project.db) is missing.".to_string(),
         });
     }
 

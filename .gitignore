@@ -43,7 +43,7 @@ Thumbs.db
 /tools/
 
 # Project state if accidentally created in repo root during dev
-/.bhc/
+/.bh/
 
 # Local-only scratch / private test inputs (real engagement data, etc.)
 /private/

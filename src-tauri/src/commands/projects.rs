@@ -32,17 +32,21 @@ impl From<LifecycleError> for CommandError {
 #[tauri::command]
 pub fn create_project(
     state: State<'_, AppState>,
+    // `folder_path` is the user-picked PARENT directory; the backend
+    // creates a timestamped `<name>__YYYY.MM.DD_HHMMSS/` subfolder inside.
     folder_path: String,
     name: String,
     description: Option<String>,
 ) -> Result<ProjectInfo, CommandError> {
-    let folder = PathBuf::from(&folder_path);
+    let parent = PathBuf::from(&folder_path);
     let app_conn = state.app_db.lock()?;
 
-    let info = create_p(&app_conn, &folder, &name, description.as_deref())?;
+    let info = create_p(&app_conn, &parent, &name, description.as_deref())?;
 
-    // Re-open the project to grab its Connection for AppState.
-    let connection = crate::db::project_db::open_or_create(&lifecycle::project_db_path(&folder))
+    // The returned folder_path is the timestamped subfolder — re-open
+    // its project.db to grab a Connection for AppState.
+    let project_folder = PathBuf::from(&info.folder_path);
+    let connection = crate::db::project_db::open_or_create(&lifecycle::project_db_path(&project_folder))
         .map_err(|e| CommandError::Db { message: e.to_string() })?;
 
     *state.current_project.lock()? = Some(CurrentProject {
@@ -50,7 +54,7 @@ pub fn create_project(
         db: Mutex::new(connection),
     });
 
-    set_sticky_session(&app_conn, &folder)?;
+    set_sticky_session(&app_conn, &project_folder)?;
     Ok(info)
 }
 
@@ -155,7 +159,7 @@ pub fn list_all_projects(state: State<'_, AppState>) -> Result<Vec<RecentProject
 
     let mut out = Vec::with_capacity(rows.len());
     for (path, name, last_opened_at) in rows {
-        let log = std::path::Path::new(&path).join(".bhc").join("activity.log");
+        let log = std::path::Path::new(&path).join(".bh").join("activity.log");
         let last_modified = std::fs::metadata(&log)
             .ok()
             .and_then(|m| m.modified().ok())

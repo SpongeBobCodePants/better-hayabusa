@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use bhc_lib::db::app_db;
 use bhc_lib::project::delete::delete_project;
 use bhc_lib::project::lifecycle::create_project;
@@ -8,20 +10,24 @@ fn delete_project_removes_folder_and_recents_row() {
     let app_tmp = tempdir().unwrap();
     let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
     let project_tmp = tempdir().unwrap();
-    let folder = project_tmp.path().to_path_buf();
+    let parent = project_tmp.path().to_path_buf();
 
-    create_project(&app_conn, &folder, "Test", None).unwrap();
-    assert!(folder.exists());
-    assert!(folder.join(".bhc").join("project.db").exists());
+    let info = create_project(&app_conn, &parent, "Test", None).unwrap();
+    let project_folder = PathBuf::from(&info.folder_path);
 
-    delete_project(&app_conn, &folder).expect("delete");
+    assert!(project_folder.exists());
+    assert!(project_folder.join(".bh").join("project.db").exists());
 
-    assert!(!folder.exists(), "project folder should be gone");
+    delete_project(&app_conn, &project_folder).expect("delete");
+
+    assert!(!project_folder.exists(), "project folder should be gone");
+    // The parent should still exist (we only delete the project subfolder).
+    assert!(parent.exists(), "parent folder should remain");
 
     let count: i64 = app_conn
         .query_row(
             "SELECT COUNT(*) FROM recent_projects WHERE path = ?1",
-            [folder.to_str().unwrap()],
+            [info.folder_path.as_str()],
             |r| r.get(0),
         )
         .unwrap();
@@ -33,17 +39,18 @@ fn delete_project_with_evidence_files_deletes_them_too() {
     let app_tmp = tempdir().unwrap();
     let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
     let project_tmp = tempdir().unwrap();
-    let folder = project_tmp.path().to_path_buf();
+    let parent = project_tmp.path().to_path_buf();
 
-    create_project(&app_conn, &folder, "Test", None).unwrap();
+    let info = create_project(&app_conn, &parent, "Test", None).unwrap();
+    let project_folder = PathBuf::from(&info.folder_path);
 
-    // Drop some "evidence" files in the folder.
-    std::fs::write(folder.join("evidence-DC01.evtx"), b"fake").unwrap();
-    std::fs::create_dir(folder.join("subfolder")).unwrap();
-    std::fs::write(folder.join("subfolder").join("more.evtx"), b"fake").unwrap();
+    // Drop some "evidence" files inside the timestamped project folder.
+    std::fs::write(project_folder.join("evidence-DC01.evtx"), b"fake").unwrap();
+    std::fs::create_dir(project_folder.join("subfolder")).unwrap();
+    std::fs::write(project_folder.join("subfolder").join("more.evtx"), b"fake").unwrap();
 
-    delete_project(&app_conn, &folder).expect("delete");
-    assert!(!folder.exists());
+    delete_project(&app_conn, &project_folder).expect("delete");
+    assert!(!project_folder.exists());
 }
 
 #[test]

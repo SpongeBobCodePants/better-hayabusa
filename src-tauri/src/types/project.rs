@@ -32,7 +32,7 @@ pub struct RecentProject {
 }
 
 /// Same as RecentProject plus a computed `last_modified` (mtime of
-/// `.bhc/activity.log` in the project folder, ISO 8601 UTC).
+/// `.bh/activity.log` in the project folder, ISO 8601 UTC).
 /// Used by the chooser table only.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/lib/generated/")]

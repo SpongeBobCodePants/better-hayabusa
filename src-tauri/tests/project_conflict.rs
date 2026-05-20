@@ -10,17 +10,17 @@ fn empty_folder_is_eligible() {
 }
 
 #[test]
-fn folder_with_bhc_project_db_is_existing_project() {
+fn folder_with_bh_project_db_is_existing_project() {
     let tmp = tempdir().unwrap();
-    fs::create_dir(tmp.path().join(".bhc")).unwrap();
-    fs::write(tmp.path().join(".bhc").join("project.db"), b"").unwrap();
+    fs::create_dir(tmp.path().join(".bh")).unwrap();
+    fs::write(tmp.path().join(".bh").join("project.db"), b"").unwrap();
 
     let state = check_folder(tmp.path()).unwrap();
     assert_eq!(state, FolderState::ExistingProject);
 }
 
 #[test]
-fn folder_with_other_files_but_no_bhc_is_eligible() {
+fn folder_with_other_files_but_no_bh_is_eligible() {
     let tmp = tempdir().unwrap();
     fs::write(tmp.path().join("readme.txt"), b"hi").unwrap();
     let state = check_folder(tmp.path()).unwrap();

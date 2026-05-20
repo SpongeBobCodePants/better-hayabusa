@@ -14,7 +14,7 @@ pub enum ActivityLogError {
     Timestamp(#[from] time::error::Format),
 }
 
-/// Events that can be appended to a project's `.bhc/activity.log`.
+/// Events that can be appended to a project's `.bh/activity.log`.
 /// M2 ships project_opened and settings_changed; M3/M4 extend with
 /// job and run events.
 #[derive(Debug, Clone)]
