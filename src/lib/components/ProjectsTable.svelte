@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { Info } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import {
@@ -10,6 +11,12 @@
     TableHeader,
     TableRow,
   } from '$lib/components/ui/table';
+  import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+  } from '$lib/components/ui/tooltip';
   import { deleteProject as ipcDelete, removeRecentProject } from '$lib/ipc/projects';
   import { openAndInstall } from '$lib/stores/currentProject';
   import { formatDateSync, type TimezoneMode } from '$lib/helpers/formatDate';
@@ -103,11 +110,10 @@
   <Table class="table-fixed">
     <TableHeader>
       <TableRow>
-        <TableHead class="w-[15%]">Name</TableHead>
-        <TableHead class="w-[25%]">Description</TableHead>
-        <TableHead class="w-[30%]">Path</TableHead>
-        <TableHead class="w-[15%]">Last modified</TableHead>
-        <TableHead class="w-[15%]">Actions</TableHead>
+        <TableHead class="w-[40%]">Name</TableHead>
+        <TableHead class="w-[8%]">Info</TableHead>
+        <TableHead class="w-[25%]">Last modified</TableHead>
+        <TableHead class="w-[27%]">Actions</TableHead>
       </TableRow>
     </TableHeader>
     <TableBody>
@@ -116,15 +122,28 @@
           <TableCell class="font-medium">
             <div class="truncate" title={p.name}>{p.name}</div>
           </TableCell>
-          <TableCell class="text-slate-600">
-            {#if p.description}
-              <div class="truncate" title={p.description}>{p.description}</div>
-            {:else}
-              <span class="text-slate-400">—</span>
-            {/if}
-          </TableCell>
-          <TableCell class="text-xs text-slate-600">
-            <div class="truncate font-mono" title={p.path}>{p.path}</div>
+          <TableCell>
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger>
+                  <Info class="h-4 w-4 text-slate-500 hover:text-slate-800" />
+                </TooltipTrigger>
+                <TooltipContent class="max-w-md space-y-3">
+                  <div>
+                    <div class="text-xs font-semibold text-slate-400">Path</div>
+                    <div class="font-mono text-xs break-all">{p.path}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold text-slate-400">Description</div>
+                    {#if p.description}
+                      <div class="text-sm">{p.description}</div>
+                    {:else}
+                      <div class="text-sm italic text-slate-400">no description</div>
+                    {/if}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </TableCell>
           <TableCell class="whitespace-nowrap">
             {p.last_modified ? formatDateSync(p.last_modified, tzMode) : '—'}
