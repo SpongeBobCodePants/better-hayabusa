@@ -1,6 +1,8 @@
 use std::path::Path;
 
 use rusqlite::Connection;
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 use crate::db::migrations::{run_migrations, MigrationError, APP_MIGRATIONS};
 
@@ -40,4 +42,46 @@ pub fn set_state(conn: &Connection, key: &str, value: &str) -> Result<(), AppDbE
         [key, value],
     )?;
     Ok(())
+}
+
+/// Insert or update a recent_projects row, bumping last_opened_at to now.
+pub fn upsert_recent_project(
+    conn: &Connection,
+    path: &str,
+    name: &str,
+) -> Result<(), AppDbError> {
+    let now = OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .map_err(|e| AppDbError::Sql(rusqlite::Error::ToSqlConversionFailure(Box::new(e))))?;
+    conn.execute(
+        "INSERT INTO recent_projects (path, name, last_opened_at) VALUES (?1, ?2, ?3)
+         ON CONFLICT(path) DO UPDATE SET name = excluded.name, last_opened_at = excluded.last_opened_at",
+        rusqlite::params![path, name, now],
+    )?;
+    Ok(())
+}
+
+/// Delete a recent_projects row by path. Returns true if a row was removed.
+pub fn remove_recent_project(conn: &Connection, path: &str) -> Result<bool, AppDbError> {
+    let n = conn.execute("DELETE FROM recent_projects WHERE path = ?1", [path])?;
+    Ok(n > 0)
+}
+
+/// Read all recent_projects rows ordered by last_opened_at DESC.
+pub fn list_recent_projects(conn: &Connection) -> Result<Vec<(String, String, String)>, AppDbError> {
+    let mut stmt = conn.prepare(
+        "SELECT path, name, last_opened_at FROM recent_projects ORDER BY last_opened_at DESC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
 }
