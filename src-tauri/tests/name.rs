@@ -1,4 +1,4 @@
-use bhc_lib::project::name::validate_project_name;
+use bhc_lib::project::name::{validate_project_description, validate_project_name};
 
 #[test]
 fn empty_is_rejected() {
@@ -67,4 +67,26 @@ fn valid_names_are_accepted() {
 #[test]
 fn surrounding_whitespace_is_trimmed_before_validation() {
     assert!(validate_project_name("  Test  ").is_ok());
+}
+
+#[test]
+fn description_none_is_accepted() {
+    assert!(validate_project_description(None).is_ok());
+}
+
+#[test]
+fn description_short_is_accepted() {
+    assert!(validate_project_description(Some("Short description")).is_ok());
+}
+
+#[test]
+fn description_at_limit_is_accepted() {
+    let exactly_250 = "x".repeat(250);
+    assert!(validate_project_description(Some(&exactly_250)).is_ok());
+}
+
+#[test]
+fn description_over_limit_is_rejected() {
+    let too_long = "x".repeat(251);
+    assert!(validate_project_description(Some(&too_long)).is_err());
 }

@@ -38,3 +38,14 @@ pub fn validate_project_name(name: &str) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// Returns `Ok(())` if `desc` is None or its length is at most 250
+/// characters; `Err(reason)` otherwise.
+pub fn validate_project_description(desc: Option<&str>) -> Result<(), String> {
+    if let Some(d) = desc {
+        if d.chars().count() > 250 {
+            return Err("Description is too long (max 250 characters).".to_string());
+        }
+    }
+    Ok(())
+}

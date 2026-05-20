@@ -26,3 +26,17 @@ export function validateProjectName(name: string): string | null {
   if (reserved.has(base)) return `'${trimmed}' is a Windows-reserved name.`;
   return null;
 }
+
+/**
+ * Mirror of validate_project_description in src-tauri/src/project/name.rs.
+ * Returns null if valid, or a human-readable error message.
+ *
+ * Uses spread for code-point counting so emojis and combining characters
+ * count as 1, matching Rust's `chars().count()`.
+ */
+export function validateProjectDescription(desc: string): string | null {
+  if ([...desc].length > 250) {
+    return 'Description is too long (max 250 characters).';
+  }
+  return null;
+}

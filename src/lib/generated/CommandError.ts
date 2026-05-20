@@ -8,4 +8,4 @@
  * Add new variants here when a command needs to surface a structured
  * failure case to the UI — never funnel real errors through `Internal`.
  */
-export type CommandError = { "kind": "NotFound", path: string, } | { "kind": "AlreadyExists", path: string, } | { "kind": "NotAProject", path: string, } | { "kind": "InvalidName", reason: string, } | { "kind": "SchemaTooNew", project_version: number, app_version: number, } | { "kind": "Io", message: string, } | { "kind": "Db", message: string, } | { "kind": "Internal", message: string, };
+export type CommandError = { "kind": "NotFound", path: string, } | { "kind": "AlreadyExists", path: string, } | { "kind": "NotAProject", path: string, } | { "kind": "InvalidName", reason: string, } | { "kind": "InvalidDescription", reason: string, } | { "kind": "SchemaTooNew", project_version: number, app_version: number, } | { "kind": "Io", message: string, } | { "kind": "Db", message: string, } | { "kind": "Internal", message: string, };

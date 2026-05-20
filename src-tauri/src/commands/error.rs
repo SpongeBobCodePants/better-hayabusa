@@ -15,6 +15,7 @@ pub enum CommandError {
     AlreadyExists   { path: String },
     NotAProject     { path: String },
     InvalidName     { reason: String },
+    InvalidDescription { reason: String },
     SchemaTooNew    { project_version: u32, app_version: u32 },
     Io              { message: String },
     Db              { message: String },

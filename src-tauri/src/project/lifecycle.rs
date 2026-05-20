@@ -11,7 +11,7 @@ use crate::db::{app_db, project_db};
 use crate::db::migrations::CURRENT_PROJECT_SCHEMA_VERSION;
 use crate::project::activity_log::{append_event, ActivityEvent};
 use crate::project::conflict::{check_folder, ConflictCheckError, FolderState};
-use crate::project::name::validate_project_name;
+use crate::project::name::{validate_project_description, validate_project_name};
 use crate::types::{LaunchResult, Project, ProjectInfo};
 
 #[derive(Debug, Error)]
@@ -24,6 +24,8 @@ pub enum LifecycleError {
     NotFound { path: String },
     #[error("invalid name: {reason}")]
     InvalidName { reason: String },
+    #[error("invalid description: {reason}")]
+    InvalidDescription { reason: String },
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
     #[error("sqlite: {0}")]
@@ -63,6 +65,8 @@ pub fn create_project(
     //    what the frontend already checked; never trust the frontend).
     validate_project_name(name)
         .map_err(|reason| LifecycleError::InvalidName { reason })?;
+    validate_project_description(description)
+        .map_err(|reason| LifecycleError::InvalidDescription { reason })?;
 
     // 2. Conflict check on the parent. If the parent itself is already a
     //    project, the user is trying to create a project inside another

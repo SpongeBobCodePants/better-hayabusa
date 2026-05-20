@@ -15,7 +15,7 @@
     SheetTitle,
   } from '$lib/components/ui/sheet';
   import { createAndInstall, openAndInstall } from '$lib/stores/currentProject';
-  import { validateProjectName } from '$lib/helpers/validateProjectName';
+  import { validateProjectName, validateProjectDescription } from '$lib/helpers/validateProjectName';
   import type { CommandError } from '$lib/generated/CommandError';
 
   type Props = {
@@ -36,6 +36,7 @@
   // state — only when they've typed something invalid. The Create button
   // is still disabled by the existing folder/name-trim guard below.
   let nameError = $derived(name.trim() === '' ? null : validateProjectName(name));
+  let descError = $derived(description === '' ? null : validateProjectDescription(description));
 
   function reset() {
     name = '';
@@ -63,6 +64,10 @@
       error = nameError;
       return;
     }
+    if (descError) {
+      error = descError;
+      return;
+    }
     busy = true;
     error = null;
     conflictPath = null;
@@ -77,6 +82,8 @@
       if (err.kind === 'AlreadyExists') {
         conflictPath = err.path;
       } else if (err.kind === 'InvalidName') {
+        error = err.reason;
+      } else if (err.kind === 'InvalidDescription') {
         error = err.reason;
       } else if (err.kind === 'Io') {
         error = `I/O error: ${err.message}`;
@@ -142,7 +149,15 @@
 
       <div>
         <Label for="description">Description (optional)</Label>
-        <Textarea id="description" bind:value={description} rows={3} />
+        <Textarea id="description" bind:value={description} rows={3} maxlength={250} />
+        <div class="mt-1 flex items-center justify-between">
+          {#if descError}
+            <p class="text-xs text-red-600">{descError}</p>
+          {:else}
+            <p class="text-xs text-slate-400">Optional</p>
+          {/if}
+          <p class="text-xs text-slate-400">{[...description].length} / 250</p>
+        </div>
       </div>
 
       {#if conflictPath}
@@ -168,7 +183,7 @@
 
     <SheetFooter class="flex gap-2">
       <Button variant="outline" onclick={() => { open = false; reset(); }}>Cancel</Button>
-      <Button onclick={handleCreate} disabled={busy || nameError !== null}>
+      <Button onclick={handleCreate} disabled={busy || nameError !== null || descError !== null}>
         {busy ? 'Creating...' : 'Create'}
       </Button>
     </SheetFooter>

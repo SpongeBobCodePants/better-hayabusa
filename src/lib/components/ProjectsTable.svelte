@@ -110,10 +110,10 @@
   <Table class="table-fixed">
     <TableHeader>
       <TableRow>
-        <TableHead class="w-[40%]">Name</TableHead>
-        <TableHead class="w-[8%]">Info</TableHead>
+        <TableHead class="w-[45%]">Name</TableHead>
         <TableHead class="w-[25%]">Last modified</TableHead>
-        <TableHead class="w-[27%]">Actions</TableHead>
+        <TableHead class="w-[7%]">Info</TableHead>
+        <TableHead class="w-[23%]">Actions</TableHead>
       </TableRow>
     </TableHeader>
     <TableBody>
@@ -122,31 +122,25 @@
           <TableCell class="font-medium">
             <div class="truncate" title={p.name}>{p.name}</div>
           </TableCell>
+          <TableCell class="whitespace-nowrap">
+            {p.last_modified ? formatDateSync(p.last_modified, tzMode) : '—'}
+          </TableCell>
           <TableCell>
             <TooltipProvider delayDuration={150}>
               <Tooltip>
                 <TooltipTrigger>
                   <Info class="h-4 w-4 text-slate-500 hover:text-slate-800" />
                 </TooltipTrigger>
-                <TooltipContent class="max-w-md space-y-3">
-                  <div>
-                    <div class="text-xs font-semibold text-slate-400">Path</div>
-                    <div class="font-mono text-xs break-all">{p.path}</div>
-                  </div>
-                  <div>
-                    <div class="text-xs font-semibold text-slate-400">Description</div>
-                    {#if p.description}
-                      <div class="text-sm">{p.description}</div>
-                    {:else}
-                      <div class="text-sm italic text-slate-400">no description</div>
-                    {/if}
-                  </div>
+                <TooltipContent class="max-w-md flex-col items-start gap-4">
+                  <div class="font-mono text-xs break-all">{p.path}</div>
+                  {#if p.description}
+                    <div class="text-sm">{p.description}</div>
+                  {:else}
+                    <div class="text-sm italic text-slate-400">no description</div>
+                  {/if}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-          </TableCell>
-          <TableCell class="whitespace-nowrap">
-            {p.last_modified ? formatDateSync(p.last_modified, tzMode) : '—'}
           </TableCell>
           <TableCell class="space-x-2 whitespace-nowrap">
             <Button size="sm" onclick={() => handleOpen(p)}>Open</Button>

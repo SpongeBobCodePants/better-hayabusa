@@ -72,6 +72,17 @@ fn create_project_rejects_invalid_name() {
 }
 
 #[test]
+fn create_project_rejects_description_over_250_chars() {
+    let app_tmp = tempdir().unwrap();
+    let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
+    let project_tmp = tempdir().unwrap();
+    let long = "x".repeat(251);
+    let result = create_project(&app_conn, project_tmp.path(), "Test", Some(&long));
+    use bhc_lib::project::lifecycle::LifecycleError;
+    assert!(matches!(result, Err(LifecycleError::InvalidDescription { .. })));
+}
+
+#[test]
 fn create_project_inside_existing_project_errors() {
     let app_tmp = tempdir().unwrap();
     let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
