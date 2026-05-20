@@ -74,6 +74,7 @@
     <TableHeader>
       <TableRow>
         <TableHead>Name</TableHead>
+        <TableHead>Path</TableHead>
         <TableHead>Last opened</TableHead>
         <TableHead>Last modified</TableHead>
         <TableHead class="text-right">Actions</TableHead>
@@ -83,6 +84,9 @@
       {#each filtered as p}
         <TableRow>
           <TableCell class="font-medium">{p.name}</TableCell>
+          <TableCell class="max-w-xs break-all text-xs text-slate-600">
+            <code>{p.path}</code>
+          </TableCell>
           <TableCell>{formatDateSync(p.last_opened_at, tzMode)}</TableCell>
           <TableCell>
             {p.last_modified ? formatDateSync(p.last_modified, tzMode) : '—'}

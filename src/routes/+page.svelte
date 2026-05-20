@@ -3,6 +3,14 @@
   import { goto } from '$app/navigation';
   import { Button } from '$lib/components/ui/button';
   import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+  import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+  } from '$lib/components/ui/table';
   import { listRecentProjects } from '$lib/ipc/projects';
   import { openAndInstall } from '$lib/stores/currentProject';
   import { formatDateSync } from '$lib/helpers/formatDate';
@@ -90,21 +98,27 @@
           </p>
         </div>
       {:else}
-        <ul class="divide-y">
-          {#each recents.slice(0, count) as r}
-            <li>
-              <button
-                class="flex w-full items-center justify-between px-2 py-2 text-left hover:bg-slate-100"
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Last opened</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {#each recents.slice(0, count) as r}
+              <TableRow
+                class="cursor-pointer hover:bg-slate-100"
                 onclick={() => handleOpenRecent(r.path)}
               >
-                <span class="text-sm font-medium">{r.name}</span>
-                <span class="text-xs text-slate-500">
+                <TableCell class="font-medium">{r.name}</TableCell>
+                <TableCell class="text-slate-500">
                   {formatDateSync(r.last_opened_at, tzMode)}
-                </span>
-              </button>
-            </li>
-          {/each}
-        </ul>
+                </TableCell>
+              </TableRow>
+            {/each}
+          </TableBody>
+        </Table>
       {/if}
     </CardContent>
   </Card>
