@@ -101,3 +101,83 @@ pub fn create_project(
 
     Ok(ProjectInfo { project, folder_path: folder_str })
 }
+
+/// Possible outcomes of `open_project`. The schema-version mismatch is
+/// not an Err because it's a designed UX state (user-recoverable: upgrade
+/// the app), not a system failure.
+pub enum OpenOutcome {
+    Loaded {
+        info: ProjectInfo,
+        connection: Connection, // caller installs into AppState
+    },
+    SchemaTooNew {
+        path: String,
+        name: String,
+        project_version: u32,
+        app_version: u32,
+    },
+}
+
+/// Opens an existing project. Validates that `.bhc/project.db` exists,
+/// runs forward migrations (no-op if up to date), checks the project's
+/// stored schema version against the app's, logs the open event, bumps
+/// `recent_projects.last_opened_at`.
+pub fn open_project(
+    app_conn: &Connection,
+    folder: &Path,
+) -> Result<OpenOutcome, LifecycleError> {
+    let db_path = project_db_path(folder);
+    if !db_path.exists() {
+        return Err(LifecycleError::NotAProject {
+            path: folder.display().to_string(),
+        });
+    }
+
+    let project_conn = project_db::open_or_create(&db_path)?;
+
+    // Read schema version.
+    let project_version = project_db::read_schema_version(&project_conn)?
+        .ok_or_else(|| LifecycleError::NotAProject {
+            path: folder.display().to_string(),
+        })?;
+
+    if project_version > CURRENT_PROJECT_SCHEMA_VERSION {
+        let name: String = project_conn
+            .query_row("SELECT name FROM projects LIMIT 1", [], |r| r.get(0))
+            .unwrap_or_else(|_| String::from("(unknown)"));
+
+        return Ok(OpenOutcome::SchemaTooNew {
+            path: folder.display().to_string(),
+            name,
+            project_version,
+            app_version: CURRENT_PROJECT_SCHEMA_VERSION,
+        });
+    }
+
+    // Read the project row.
+    let project: Project = project_conn.query_row(
+        "SELECT id, name, description, created_at, app_schema_version FROM projects LIMIT 1",
+        [],
+        |row| Ok(Project {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            description: row.get(2)?,
+            created_at: row.get(3)?,
+            app_schema_version: row.get::<_, u32>(4)?,
+        }),
+    )?;
+
+    let folder_str = folder.display().to_string();
+
+    // Log + upsert recents (best-effort log; recents upsert is required).
+    let _ = append_event(
+        &activity_log_path(folder),
+        ActivityEvent::ProjectOpened { name: project.name.clone() },
+    );
+    app_db::upsert_recent_project(app_conn, &folder_str, &project.name)?;
+
+    Ok(OpenOutcome::Loaded {
+        info: ProjectInfo { project, folder_path: folder_str },
+        connection: project_conn,
+    })
+}
