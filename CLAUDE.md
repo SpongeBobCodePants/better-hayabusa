@@ -97,6 +97,16 @@ If you skip this, GitHub will reject the push with `GH007: Your push would publi
 
 > Frontend tests (Vitest) and E2E tests (Playwright) land in later milestones.
 
+## Versioning
+
+We use SemVer. `src-tauri/tauri.conf.json` is the canonical version source; `package.json` and `src-tauri/Cargo.toml` mirror it.
+
+- **Patch bump** (`0.1.x` → `0.1.x+1`) happens automatically in `/ship` on every PR.
+- **Minor bump** (`0.x.0` → `0.x+1.0`) is a manual one-line edit at milestone close. M2 close → `0.2.0`, M3 close → `0.3.0`, etc.
+- **Major bump** (`x.0.0` → `x+1.0.0`) is manual. Pre-1.0 we're in experimentation mode; `1.0.0` is cut at M8 close (portable distribution + release). Post-1.0, major bumps follow SemVer — breaking changes or significant feature waves.
+
+About page reads the version via `get_app_version` (Tauri command sourced from `tauri.conf.json`).
+
 ## Gotchas (lessons from earlier work)
 
 - **shadcn-svelte `Button` is link-aware.** When you need a navigation link styled as a button, pass `href` to `<Button>` — don't wrap `<Button>` inside `<a>`. The nested form is invalid HTML (interactive content inside an anchor) and breaks a11y.

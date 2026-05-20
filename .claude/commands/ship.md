@@ -15,6 +15,7 @@ description: Open a PR, get Codex to review it, merge if clean or loop fixes (ma
 3. **Tests + build green.** Run `cd src-tauri && cargo test` AND `pnpm build`. Both must pass. If either fails, abort with the failure output. ("Done" verification gate per CLAUDE.md.)
 4. **`gh` auth.** `gh auth status` must show a logged-in account with `repo` scope.
 5. **Per-repo git config.** `git config user.email` must be the noreply alias from CLAUDE.md, NOT the global personal email. If it's wrong, fix it per CLAUDE.md before continuing.
+6. **Version bump available.** Read current version from `src-tauri/tauri.conf.json`. Increment the patch number. Write back to `tauri.conf.json` AND mirror to `package.json` (`"version"` field) AND `src-tauri/Cargo.toml` (`version = "..."`). Stage these as part of the next commit — do NOT push a "version bump" commit separately.
 
 If a check fails, report exactly which one and stop. Don't try to fix unless the user says so.
 
@@ -22,7 +23,7 @@ If a check fails, report exactly which one and stop. Don't try to fix unless the
 
 1. Push the current branch: `git push -u origin HEAD`.
 2. Create the PR with `gh pr create --base main --title "<title>" --body "<body>"`:
-   - **Title:** derive from the most-recent merge-base-relative commit subject if there's one obvious commit, otherwise ask the user for the title.
+   - **Title:** derive from the most-recent merge-base-relative commit subject if there's one obvious commit, otherwise ask the user for the title. Optionally prefix with the new version (e.g. `v0.1.5: …`).
    - **Body:** standard format — `## Summary` (1–3 bullets), `## Test plan` (checklist of what was verified), and link any closed Issues (`Closes #NN`).
 3. Capture the PR number and URL. Report them to the user.
 
