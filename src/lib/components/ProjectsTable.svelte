@@ -113,23 +113,23 @@
     <TableBody>
       {#each filtered as p}
         <TableRow>
-          <TableCell class="align-top font-medium">
-            <div class="line-clamp-3 break-words" title={p.name}>{p.name}</div>
+          <TableCell class="font-medium">
+            <div class="truncate" title={p.name}>{p.name}</div>
           </TableCell>
-          <TableCell class="align-top text-slate-600">
+          <TableCell class="text-slate-600">
             {#if p.description}
-              <div class="line-clamp-3 break-words" title={p.description}>{p.description}</div>
+              <div class="truncate" title={p.description}>{p.description}</div>
             {:else}
               <span class="text-slate-400">—</span>
             {/if}
           </TableCell>
-          <TableCell class="align-top text-xs text-slate-600">
-            <div class="line-clamp-3 break-all font-mono" title={p.path}>{p.path}</div>
+          <TableCell class="text-xs text-slate-600">
+            <div class="truncate font-mono" title={p.path}>{p.path}</div>
           </TableCell>
-          <TableCell class="whitespace-nowrap align-top">
+          <TableCell class="whitespace-nowrap">
             {p.last_modified ? formatDateSync(p.last_modified, tzMode) : '—'}
           </TableCell>
-          <TableCell class="space-x-2 whitespace-nowrap align-top">
+          <TableCell class="space-x-2 whitespace-nowrap">
             <Button size="sm" onclick={() => handleOpen(p)}>Open</Button>
             <Button
               size="sm"
