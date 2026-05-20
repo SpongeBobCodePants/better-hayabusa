@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use thiserror::Error;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
@@ -10,7 +10,7 @@ use crate::db::{app_db, project_db};
 use crate::db::migrations::CURRENT_PROJECT_SCHEMA_VERSION;
 use crate::project::activity_log::{append_event, ActivityEvent};
 use crate::project::conflict::{check_folder, ConflictCheckError, FolderState};
-use crate::types::{Project, ProjectInfo};
+use crate::types::{LaunchResult, Project, ProjectInfo};
 
 #[derive(Debug, Error)]
 pub enum LifecycleError {
@@ -180,4 +180,82 @@ pub fn open_project(
         info: ProjectInfo { project, folder_path: folder_str },
         connection: project_conn,
     })
+}
+
+/// Drops the AppState current_project handle. Called from the command
+/// layer (this Rust API doesn't own AppState).
+///
+/// Side effect: clears `last_open_project_path` in app.db, so a subsequent
+/// launch with sticky session enabled lands on Home.
+pub fn clear_sticky_session(app_conn: &Connection) -> Result<(), LifecycleError> {
+    app_conn.execute(
+        "DELETE FROM app_state WHERE key = 'last_open_project_path'",
+        [],
+    )?;
+    Ok(())
+}
+
+/// Sets `last_open_project_path` so the next launch can sticky-restore.
+pub fn set_sticky_session(app_conn: &Connection, folder: &Path) -> Result<(), LifecycleError> {
+    app_db::set_state(app_conn, "last_open_project_path", &folder.display().to_string())?;
+    Ok(())
+}
+
+/// Run at app launch. Decides whether to sticky-restore, land on Home,
+/// or show a failure screen.
+pub fn check_last_open_project(app_conn: &Connection) -> Result<LaunchResult, LifecycleError> {
+    // Honor the launch_behavior setting.
+    let behavior = app_db::get_state(app_conn, "launch_behavior")?
+        .unwrap_or_else(|| "last_project".to_string());
+    if behavior == "home_page" {
+        return Ok(LaunchResult::Disabled);
+    }
+
+    let last_path = match app_db::get_state(app_conn, "last_open_project_path")? {
+        Some(p) => p,
+        None => return Ok(LaunchResult::NoneSet),
+    };
+
+    let folder = PathBuf::from(&last_path);
+
+    // Look up the friendly name from recents (if any) for error reporting.
+    let name = app_conn
+        .query_row(
+            "SELECT name FROM recent_projects WHERE path = ?1",
+            [&last_path],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()?
+        .unwrap_or_else(|| String::from("(unknown)"));
+
+    // Folder still exists?
+    if !folder.exists() {
+        app_db::remove_recent_project(app_conn, &last_path)?;
+        clear_sticky_session(app_conn)?;
+        return Ok(LaunchResult::Failed {
+            path: last_path,
+            name,
+            reason: "Folder no longer exists.".to_string(),
+        });
+    }
+
+    // project.db still there?
+    if !project_db_path(&folder).exists() {
+        app_db::remove_recent_project(app_conn, &last_path)?;
+        clear_sticky_session(app_conn)?;
+        return Ok(LaunchResult::Failed {
+            path: last_path,
+            name,
+            reason: "Project metadata (.bhc/project.db) is missing.".to_string(),
+        });
+    }
+
+    // Try opening (this returns OpenOutcome; we drop the connection here
+    // — the Tauri command layer re-opens to install in AppState).
+    match open_project(app_conn, &folder)? {
+        OpenOutcome::Loaded { info, .. } => Ok(LaunchResult::Loaded { info }),
+        OpenOutcome::SchemaTooNew { path, name, project_version, app_version } => {
+            Ok(LaunchResult::SchemaTooNew { path, name, project_version, app_version })
+        }
+    }
 }

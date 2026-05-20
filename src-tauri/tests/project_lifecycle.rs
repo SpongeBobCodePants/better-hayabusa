@@ -1,6 +1,7 @@
 use bhc_lib::db::app_db;
 use bhc_lib::db::migrations::CURRENT_PROJECT_SCHEMA_VERSION;
-use bhc_lib::project::lifecycle::{create_project, open_project, OpenOutcome};
+use bhc_lib::project::lifecycle::{check_last_open_project, create_project, open_project, OpenOutcome};
+use bhc_lib::types::LaunchResult;
 use tempfile::tempdir;
 
 #[test]
@@ -142,4 +143,72 @@ fn open_project_updates_last_opened_at_in_recents() {
     ).unwrap();
 
     assert_ne!(before, after, "open_project should bump last_opened_at");
+}
+
+#[test]
+fn check_last_open_when_none_set_returns_none_set() {
+    let app_tmp = tempdir().unwrap();
+    let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
+
+    let result = check_last_open_project(&app_conn).unwrap();
+    assert!(matches!(result, LaunchResult::NoneSet));
+}
+
+#[test]
+fn check_last_open_when_disabled_returns_disabled() {
+    let app_tmp = tempdir().unwrap();
+    let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
+    app_db::set_state(&app_conn, "launch_behavior", "home_page").unwrap();
+    app_db::set_state(&app_conn, "last_open_project_path", "C:\\whatever").unwrap();
+
+    let result = check_last_open_project(&app_conn).unwrap();
+    assert!(matches!(result, LaunchResult::Disabled));
+}
+
+#[test]
+fn check_last_open_with_loadable_project_returns_loaded() {
+    let app_tmp = tempdir().unwrap();
+    let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
+
+    let project_tmp = tempdir().unwrap();
+    create_project(&app_conn, project_tmp.path(), "Test", None).unwrap();
+    app_db::set_state(
+        &app_conn,
+        "last_open_project_path",
+        project_tmp.path().to_str().unwrap(),
+    ).unwrap();
+
+    let result = check_last_open_project(&app_conn).unwrap();
+    assert!(matches!(result, LaunchResult::Loaded { .. }));
+}
+
+#[test]
+fn check_last_open_with_missing_folder_returns_failed_and_cleans_recents() {
+    let app_tmp = tempdir().unwrap();
+    let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
+
+    let missing = "C:\\definitely-does-not-exist-xyz";
+    app_db::upsert_recent_project(&app_conn, missing, "Ghost").unwrap();
+    app_db::set_state(&app_conn, "last_open_project_path", missing).unwrap();
+
+    let result = check_last_open_project(&app_conn).unwrap();
+    match result {
+        LaunchResult::Failed { path, name, .. } => {
+            assert_eq!(path, missing);
+            assert_eq!(name, "Ghost");
+        }
+        _ => panic!("expected Failed"),
+    }
+
+    // Recents entry should be gone.
+    let count: i64 = app_conn.query_row(
+        "SELECT COUNT(*) FROM recent_projects WHERE path = ?1",
+        [missing],
+        |r| r.get(0),
+    ).unwrap();
+    assert_eq!(count, 0);
+
+    // last_open_project_path setting should be cleared.
+    let v = app_db::get_state(&app_conn, "last_open_project_path").unwrap();
+    assert!(v.is_none());
 }
