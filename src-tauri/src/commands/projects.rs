@@ -241,22 +241,48 @@ pub fn delete_project(
 ) -> Result<(), CommandError> {
     let folder = PathBuf::from(&folder_path);
 
-    // If this is the currently-open project, drop the in-memory handle
-    // first so the project.db file lock is released before deletion.
+    // If this is the currently-open project, we have to drop the
+    // CurrentProject handle first — Windows refuses to delete the
+    // project.db file while we hold a Connection to it. Cache the
+    // ProjectInfo so we can best-effort reinstall the session if delete
+    // then fails mid-way (permission denied, AV lock, transient I/O).
     // Sticky-session clearing is handled by the inner delete API.
-    {
+    let cached_info: Option<ProjectInfo> = {
         let mut current = state.current_project.lock()?;
         if matches!(current.as_ref(), Some(cp) if cp.info.folder_path == folder_path) {
+            let info = current.as_ref().map(|cp| cp.info.clone());
             *current = None;
+            info
+        } else {
+            None
         }
-    }
+    };
 
     let app_conn = state.app_db.lock()?;
-    crate::project::delete::delete_project(&app_conn, &folder)
+    let delete_result = crate::project::delete::delete_project(&app_conn, &folder)
         .map_err(|e| match e {
             crate::project::delete::DeleteError::Io(e) => CommandError::Io { message: e.to_string() },
             crate::project::delete::DeleteError::Sql(e) => CommandError::Db { message: e.to_string() },
             crate::project::delete::DeleteError::AppDb(e) => CommandError::Db { message: e.to_string() },
-        })?;
+        });
+
+    if delete_result.is_err() {
+        // Best-effort: reinstall the session so the user doesn't lose
+        // their open project just because the disk delete failed. If
+        // reopen ALSO fails, fall through with current still None and
+        // let the user pick the project again from the chooser.
+        if let Some(info) = cached_info {
+            let project_folder = PathBuf::from(&info.folder_path);
+            if let Ok(connection) = crate::db::project_db::open_or_create(
+                &lifecycle::project_db_path(&project_folder),
+            ) {
+                *state.current_project.lock()? = Some(CurrentProject {
+                    info,
+                    db: Mutex::new(connection),
+                });
+            }
+        }
+    }
+    delete_result?;
     Ok(())
 }
