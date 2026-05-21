@@ -54,7 +54,7 @@
     if (result.kind === 'Loaded') {
       goto('/projects/current');
     } else if (result.kind === 'SchemaTooNew') {
-      alert(`Project requires app v${result.app_version}+; you have v${result.project_version}.`);
+      alert(`Project requires app v${result.project_version}+; you have v${result.app_version}.`);
     } else if (result.kind === 'Missing') {
       staleEntry = { path: result.path, name: result.name, reason: result.reason };
       stalePromptOpen = true;

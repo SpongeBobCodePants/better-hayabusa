@@ -241,13 +241,13 @@ pub fn delete_project(
 ) -> Result<(), CommandError> {
     let folder = PathBuf::from(&folder_path);
 
-    // If this is the currently-open project, close it first (drops DB Connection).
+    // If this is the currently-open project, drop the in-memory handle
+    // first so the project.db file lock is released before deletion.
+    // Sticky-session clearing is handled by the inner delete API.
     {
         let mut current = state.current_project.lock()?;
-        if let Some(cp) = current.as_ref() {
-            if cp.info.folder_path == folder_path {
-                *current = None;
-            }
+        if matches!(current.as_ref(), Some(cp) if cp.info.folder_path == folder_path) {
+            *current = None;
         }
     }
 

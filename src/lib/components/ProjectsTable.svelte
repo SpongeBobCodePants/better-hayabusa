@@ -18,7 +18,7 @@
     TooltipTrigger,
   } from '$lib/components/ui/tooltip';
   import { deleteProject as ipcDelete, removeRecentProject } from '$lib/ipc/projects';
-  import { openAndInstall } from '$lib/stores/currentProject';
+  import { loadCurrentProject, openAndInstall } from '$lib/stores/currentProject';
   import { formatDateSync, type TimezoneMode } from '$lib/helpers/formatDate';
   import ConfirmDeleteProject from './ConfirmDeleteProject.svelte';
   import ConfirmRemoveStaleRecent from './ConfirmRemoveStaleRecent.svelte';
@@ -51,7 +51,7 @@
     if (result.kind === 'Loaded') {
       goto('/projects/current');
     } else if (result.kind === 'SchemaTooNew') {
-      alert(`'${p.name}' requires app v${result.app_version}+; you have v${result.project_version}.`);
+      alert(`'${p.name}' requires app v${result.project_version}+; you have v${result.app_version}.`);
     } else if (result.kind === 'Missing') {
       staleEntry = { path: result.path, name: result.name, reason: result.reason };
       stalePromptOpen = true;
@@ -83,6 +83,7 @@
         alert(`Remove failed: ${JSON.stringify(e)}`);
         return;
       }
+      await loadCurrentProject();
       onchange?.();
       return;
     }
@@ -94,6 +95,7 @@
     if (!toDelete) return;
     try {
       await ipcDelete(toDelete.path);
+      await loadCurrentProject();
       onchange?.();
     } catch (e) {
       alert(`Delete failed: ${JSON.stringify(e)}`);

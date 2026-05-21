@@ -17,7 +17,9 @@ pub enum DeleteError {
 }
 
 /// Recursively deletes the project folder at `folder` and removes the
-/// corresponding `recent_projects` entry from app.db.
+/// corresponding `recent_projects` entry from app.db. Also clears the
+/// sticky-session pointer if it targets the same folder, so the next
+/// launch doesn't show a Failed takeover for a path that's been removed.
 ///
 /// Only removes the folder if it actually is a Better Hayabusa project
 /// (i.e. `.bh/project.db` is present). If the folder is missing, or
@@ -33,6 +35,15 @@ pub fn delete_project(app_conn: &Connection, folder: &Path) -> Result<(), Delete
     if folder.exists() && project_db.exists() {
         fs::remove_dir_all(folder)?;
     }
-    app_db::remove_recent_project(app_conn, &folder.display().to_string())?;
+    let folder_str = folder.display().to_string();
+    app_db::remove_recent_project(app_conn, &folder_str)?;
+
+    let sticky = app_db::get_state(app_conn, "last_open_project_path")?;
+    if sticky.as_deref() == Some(folder_str.as_str()) {
+        app_conn.execute(
+            "DELETE FROM app_state WHERE key = 'last_open_project_path'",
+            [],
+        )?;
+    }
     Ok(())
 }

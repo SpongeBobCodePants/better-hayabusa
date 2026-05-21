@@ -85,6 +85,56 @@ fn delete_project_refuses_to_remove_non_project_folder() {
 }
 
 #[test]
+fn delete_project_clears_sticky_session_when_it_matches() {
+    // Regression test: deleting the project that's also the sticky-session
+    // target must clear last_open_project_path. Otherwise the next launch
+    // shows a Failed takeover for a path that no longer exists.
+    let app_tmp = tempdir().unwrap();
+    let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
+    let project_tmp = tempdir().unwrap();
+    let parent = project_tmp.path().to_path_buf();
+
+    let info = create_project(&app_conn, &parent, "Test", None).unwrap();
+    let project_folder = PathBuf::from(&info.folder_path);
+
+    // Point sticky session at this project.
+    app_db::set_state(&app_conn, "last_open_project_path", info.folder_path.as_str()).unwrap();
+    assert_eq!(
+        app_db::get_state(&app_conn, "last_open_project_path").unwrap().as_deref(),
+        Some(info.folder_path.as_str())
+    );
+
+    delete_project(&app_conn, &project_folder).expect("delete");
+
+    // Sticky must be cleared.
+    let v = app_db::get_state(&app_conn, "last_open_project_path").unwrap();
+    assert!(v.is_none(), "sticky session must be cleared when deleting its target");
+}
+
+#[test]
+fn delete_project_preserves_sticky_session_when_it_does_not_match() {
+    let app_tmp = tempdir().unwrap();
+    let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
+    let project_tmp = tempdir().unwrap();
+    let parent = project_tmp.path().to_path_buf();
+
+    let info_a = create_project(&app_conn, &parent, "A", None).unwrap();
+    // Sleep so the second create lands on a different timestamp (folder
+    // names use second-precision).
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    let info_b = create_project(&app_conn, &parent, "B", None).unwrap();
+
+    // Sticky points at B; we delete A.
+    app_db::set_state(&app_conn, "last_open_project_path", info_b.folder_path.as_str()).unwrap();
+
+    delete_project(&app_conn, std::path::Path::new(&info_a.folder_path)).expect("delete");
+
+    // Sticky must still point at B.
+    let v = app_db::get_state(&app_conn, "last_open_project_path").unwrap();
+    assert_eq!(v.as_deref(), Some(info_b.folder_path.as_str()));
+}
+
+#[test]
 fn delete_project_on_missing_folder_still_cleans_recents() {
     let app_tmp = tempdir().unwrap();
     let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
