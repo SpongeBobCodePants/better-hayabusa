@@ -47,7 +47,16 @@
   );
 
   async function handleOpen(p: RecentProjectListEntry) {
-    const result = await openAndInstall(p.path);
+    let result;
+    try {
+      result = await openAndInstall(p.path);
+    } catch (e) {
+      // Backend errored (corrupt project.db, missing projects row, etc.).
+      // Without this catch the rejection would silently break the click
+      // handler — the user would see nothing actionable.
+      alert(`Failed to open '${p.name}': ${JSON.stringify(e)}`);
+      return;
+    }
     if (result.kind === 'Loaded') {
       goto('/projects/current');
     } else if (result.kind === 'SchemaTooNew') {
