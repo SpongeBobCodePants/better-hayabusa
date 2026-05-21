@@ -54,6 +54,37 @@ fn delete_project_with_evidence_files_deletes_them_too() {
 }
 
 #[test]
+fn delete_project_refuses_to_remove_non_project_folder() {
+    let app_tmp = tempdir().unwrap();
+    let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
+
+    // A folder that exists on disk but isn't a Better Hayabusa project
+    // (no .bh/project.db). It has user data we MUST NOT erase.
+    let stray_tmp = tempdir().unwrap();
+    let stray = stray_tmp.path().to_path_buf();
+    std::fs::write(stray.join("important-user-file.txt"), b"don't touch me").unwrap();
+
+    // Pretend a stale recents row points at it.
+    app_db::upsert_recent_project(&app_conn, &stray.display().to_string(), "Ghost").unwrap();
+
+    delete_project(&app_conn, &stray).expect("delete should not error");
+
+    // Folder + file MUST remain untouched.
+    assert!(stray.exists(), "non-project folder must not be removed");
+    assert!(stray.join("important-user-file.txt").exists(), "user data must not be erased");
+
+    // Recents row should still be cleaned.
+    let count: i64 = app_conn
+        .query_row(
+            "SELECT COUNT(*) FROM recent_projects WHERE path = ?1",
+            [stray.display().to_string()],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[test]
 fn delete_project_on_missing_folder_still_cleans_recents() {
     let app_tmp = tempdir().unwrap();
     let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();

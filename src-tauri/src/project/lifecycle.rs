@@ -88,7 +88,16 @@ pub fn create_project(
     let project_folder_name = format!("{name}_{ts}");
     let project_folder = parent_folder.join(&project_folder_name);
 
-    // 4. Create the timestamped project folder.
+    // 4. Create the timestamped project folder. Reject if the path
+    //    already exists — second-precision timestamps can collide on
+    //    rapid same-name creates, and `create_dir_all` would silently
+    //    reuse the folder, leaving project.db's `SELECT ... LIMIT 1`
+    //    non-deterministic across multiple `projects` rows.
+    if project_folder.exists() {
+        return Err(LifecycleError::AlreadyExists {
+            path: project_folder.display().to_string(),
+        });
+    }
     fs::create_dir_all(&project_folder)?;
 
     // 5. Create .bh/ directory inside the project folder.
@@ -231,19 +240,34 @@ pub fn set_sticky_session(app_conn: &Connection, folder: &Path) -> Result<(), Li
     Ok(())
 }
 
+/// Wrapper around `LaunchResult` that also carries the live project DB
+/// `Connection` when the outcome is `Loaded`. The Tauri command layer
+/// installs the connection into `AppState`; the TS-exported shape is
+/// just `LaunchResult` (via `.result`).
+pub struct LaunchOutcome {
+    pub result: LaunchResult,
+    pub connection: Option<Connection>,
+}
+
 /// Run at app launch. Decides whether to sticky-restore, land on Home,
 /// or show a failure screen.
-pub fn check_last_open_project(app_conn: &Connection) -> Result<LaunchResult, LifecycleError> {
+///
+/// When this returns `LaunchResult::Loaded`, the project DB has already
+/// been opened (with its side effects: activity log + recents bump) and
+/// the live connection is returned in `LaunchOutcome.connection`. The
+/// command layer must use that connection instead of reopening, or the
+/// open side effects will fire twice per launch.
+pub fn check_last_open_project(app_conn: &Connection) -> Result<LaunchOutcome, LifecycleError> {
     // Honor the launch_behavior setting.
     let behavior = app_db::get_state(app_conn, "launch_behavior")?
         .unwrap_or_else(|| "last_project".to_string());
     if behavior == "home_page" {
-        return Ok(LaunchResult::Disabled);
+        return Ok(LaunchOutcome { result: LaunchResult::Disabled, connection: None });
     }
 
     let last_path = match app_db::get_state(app_conn, "last_open_project_path")? {
         Some(p) => p,
-        None => return Ok(LaunchResult::NoneSet),
+        None => return Ok(LaunchOutcome { result: LaunchResult::NoneSet, connection: None }),
     };
 
     let folder = PathBuf::from(&last_path);
@@ -262,10 +286,13 @@ pub fn check_last_open_project(app_conn: &Connection) -> Result<LaunchResult, Li
     if !folder.exists() {
         app_db::remove_recent_project(app_conn, &last_path)?;
         clear_sticky_session(app_conn)?;
-        return Ok(LaunchResult::Failed {
-            path: last_path,
-            name,
-            reason: "Folder no longer exists.".to_string(),
+        return Ok(LaunchOutcome {
+            result: LaunchResult::Failed {
+                path: last_path,
+                name,
+                reason: "Folder no longer exists.".to_string(),
+            },
+            connection: None,
         });
     }
 
@@ -273,19 +300,29 @@ pub fn check_last_open_project(app_conn: &Connection) -> Result<LaunchResult, Li
     if !project_db_path(&folder).exists() {
         app_db::remove_recent_project(app_conn, &last_path)?;
         clear_sticky_session(app_conn)?;
-        return Ok(LaunchResult::Failed {
-            path: last_path,
-            name,
-            reason: "Project metadata (.bh/project.db) is missing.".to_string(),
+        return Ok(LaunchOutcome {
+            result: LaunchResult::Failed {
+                path: last_path,
+                name,
+                reason: "Project metadata (.bh/project.db) is missing.".to_string(),
+            },
+            connection: None,
         });
     }
 
-    // Try opening (this returns OpenOutcome; we drop the connection here
-    // — the Tauri command layer re-opens to install in AppState).
+    // Try opening. Hold onto the live connection so the command layer
+    // can install it without a second `open_project` call (which would
+    // double-log + double-bump-recents).
     match open_project(app_conn, &folder)? {
-        OpenOutcome::Loaded { info, .. } => Ok(LaunchResult::Loaded { info }),
+        OpenOutcome::Loaded { info, connection } => Ok(LaunchOutcome {
+            result: LaunchResult::Loaded { info },
+            connection: Some(connection),
+        }),
         OpenOutcome::SchemaTooNew { path, name, project_version, app_version } => {
-            Ok(LaunchResult::SchemaTooNew { path, name, project_version, app_version })
+            Ok(LaunchOutcome {
+                result: LaunchResult::SchemaTooNew { path, name, project_version, app_version },
+                connection: None,
+            })
         }
     }
 }

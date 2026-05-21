@@ -190,8 +190,9 @@ fn check_last_open_when_none_set_returns_none_set() {
     let app_tmp = tempdir().unwrap();
     let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
 
-    let result = check_last_open_project(&app_conn).unwrap();
-    assert!(matches!(result, LaunchResult::NoneSet));
+    let outcome = check_last_open_project(&app_conn).unwrap();
+    assert!(matches!(outcome.result, LaunchResult::NoneSet));
+    assert!(outcome.connection.is_none());
 }
 
 #[test]
@@ -201,8 +202,9 @@ fn check_last_open_when_disabled_returns_disabled() {
     app_db::set_state(&app_conn, "launch_behavior", "home_page").unwrap();
     app_db::set_state(&app_conn, "last_open_project_path", "C:\\whatever").unwrap();
 
-    let result = check_last_open_project(&app_conn).unwrap();
-    assert!(matches!(result, LaunchResult::Disabled));
+    let outcome = check_last_open_project(&app_conn).unwrap();
+    assert!(matches!(outcome.result, LaunchResult::Disabled));
+    assert!(outcome.connection.is_none());
 }
 
 #[test]
@@ -218,8 +220,46 @@ fn check_last_open_with_loadable_project_returns_loaded() {
         info.folder_path.as_str(),
     ).unwrap();
 
-    let result = check_last_open_project(&app_conn).unwrap();
-    assert!(matches!(result, LaunchResult::Loaded { .. }));
+    let outcome = check_last_open_project(&app_conn).unwrap();
+    assert!(matches!(outcome.result, LaunchResult::Loaded { .. }));
+    assert!(outcome.connection.is_some(), "Loaded outcome must carry the live project DB connection");
+}
+
+#[test]
+fn check_last_open_does_not_double_log_or_double_bump_recents() {
+    // Regression test: sticky-session restore must not call open_project
+    // twice, or activity.log gets two project_opened entries per launch
+    // and recent_projects.last_opened_at gets bumped twice.
+    let app_tmp = tempdir().unwrap();
+    let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
+    let project_tmp = tempdir().unwrap();
+
+    let info = create_project(&app_conn, project_tmp.path(), "Test", None).unwrap();
+    let project_folder = PathBuf::from(&info.folder_path);
+    let activity_log = project_folder.join(".bh").join("activity.log");
+
+    // create_project wrote one project_opened entry. Read the baseline.
+    let baseline = std::fs::read_to_string(&activity_log).unwrap();
+    let baseline_count = baseline.matches("project_opened").count();
+    assert_eq!(baseline_count, 1, "create_project should write exactly one project_opened entry");
+
+    app_db::set_state(
+        &app_conn,
+        "last_open_project_path",
+        info.folder_path.as_str(),
+    ).unwrap();
+
+    let outcome = check_last_open_project(&app_conn).unwrap();
+    assert!(matches!(outcome.result, LaunchResult::Loaded { .. }));
+
+    // Exactly one additional project_opened entry — not two.
+    let after = std::fs::read_to_string(&activity_log).unwrap();
+    let after_count = after.matches("project_opened").count();
+    assert_eq!(
+        after_count, baseline_count + 1,
+        "check_last_open_project should append exactly one project_opened entry, got {} (baseline {})",
+        after_count, baseline_count
+    );
 }
 
 #[test]
@@ -231,14 +271,15 @@ fn check_last_open_with_missing_folder_returns_failed_and_cleans_recents() {
     app_db::upsert_recent_project(&app_conn, missing, "Ghost").unwrap();
     app_db::set_state(&app_conn, "last_open_project_path", missing).unwrap();
 
-    let result = check_last_open_project(&app_conn).unwrap();
-    match result {
+    let outcome = check_last_open_project(&app_conn).unwrap();
+    match outcome.result {
         LaunchResult::Failed { path, name, .. } => {
             assert_eq!(path, missing);
             assert_eq!(name, "Ghost");
         }
         _ => panic!("expected Failed"),
     }
+    assert!(outcome.connection.is_none());
 
     // Recents entry should be gone.
     let count: i64 = app_conn.query_row(

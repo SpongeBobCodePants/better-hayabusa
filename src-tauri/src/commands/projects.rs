@@ -131,29 +131,22 @@ pub fn get_current_project(state: State<'_, AppState>) -> Result<Option<ProjectI
 #[tauri::command]
 pub fn check_last_open_project_cmd(state: State<'_, AppState>) -> Result<LaunchResult, CommandError> {
     let app_conn = state.app_db.lock()?;
-    let result = check_last(&app_conn)?;
+    let outcome = check_last(&app_conn)?;
 
-    // If Loaded, install into AppState (re-open to get the connection).
-    if let LaunchResult::Loaded { ref info } = result {
-        drop(app_conn); // release lock before re-acquiring through open_p
-        let app_conn = state.app_db.lock()?;
-        let folder = PathBuf::from(&info.folder_path);
-        match open_p(&app_conn, &folder)? {
-            OpenOutcome::Loaded { info: i, connection } => {
-                *state.current_project.lock()? = Some(CurrentProject {
-                    info: i,
-                    db: Mutex::new(connection),
-                });
-            }
-            OpenOutcome::SchemaTooNew { .. } => {
-                // Shouldn't happen — check_last would have returned SchemaTooNew already.
-                return Err(CommandError::Internal {
-                    message: "open_project returned SchemaTooNew after check_last said Loaded".into(),
-                });
-            }
-        }
+    // If Loaded, the preflight has already opened the project and
+    // handed us the live connection — install it directly. Reopening
+    // here would double-log the project_opened event and double-bump
+    // recent_projects.last_opened_at.
+    if let LaunchResult::Loaded { ref info } = outcome.result {
+        let connection = outcome.connection.ok_or_else(|| CommandError::Internal {
+            message: "check_last_open_project returned Loaded without a connection".into(),
+        })?;
+        *state.current_project.lock()? = Some(CurrentProject {
+            info: info.clone(),
+            db: Mutex::new(connection),
+        });
     }
-    Ok(result)
+    Ok(outcome.result)
 }
 
 #[tauri::command]
