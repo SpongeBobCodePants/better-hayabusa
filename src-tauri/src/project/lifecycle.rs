@@ -93,17 +93,26 @@ pub fn create_project(
     let project_folder_name = format!("{name}_{ts}");
     let project_folder = parent_folder.join(&project_folder_name);
 
-    // 4. Create the timestamped project folder. Reject if the path
-    //    already exists — second-precision timestamps can collide on
-    //    rapid same-name creates, and `create_dir_all` would silently
-    //    reuse the folder, leaving project.db's `SELECT ... LIMIT 1`
-    //    non-deterministic across multiple `projects` rows.
-    if project_folder.exists() {
-        return Err(LifecycleError::AlreadyExists {
-            path: project_folder.display().to_string(),
-        });
+    // 4. Create the timestamped project folder. We need this step to
+    //    fail atomically if the folder already exists — otherwise two
+    //    concurrent creates with the same parent/name in the same
+    //    second can both pass an `exists()` check and then both succeed
+    //    in `create_dir_all` (which does NOT fail when the directory
+    //    already exists). The result would be two `projects` rows in
+    //    one project.db, breaking `SELECT ... LIMIT 1`.
+    //
+    //    `fs::create_dir` (non-recursive) errors with
+    //    `ErrorKind::AlreadyExists` atomically — that's the guarantee
+    //    we need. The parent already exists (we just passed the
+    //    conflict check on it).
+    if let Err(e) = fs::create_dir(&project_folder) {
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            return Err(LifecycleError::AlreadyExists {
+                path: project_folder.display().to_string(),
+            });
+        }
+        return Err(LifecycleError::Io(e));
     }
-    fs::create_dir_all(&project_folder)?;
 
     // 5. Create .bh/ directory inside the project folder.
     fs::create_dir_all(bh_dir(&project_folder))?;
@@ -318,14 +327,35 @@ pub fn check_last_open_project(app_conn: &Connection) -> Result<LaunchOutcome, L
     // Try opening. Hold onto the live connection so the command layer
     // can install it without a second `open_project` call (which would
     // double-log + double-bump-recents).
-    match open_project(app_conn, &folder)? {
-        OpenOutcome::Loaded { info, connection } => Ok(LaunchOutcome {
+    //
+    // If open_project itself errors (corrupt project.db, missing
+    // projects row, sqlite I/O), convert that into a structured
+    // LaunchResult::Failed and clear the sticky pointer. Otherwise the
+    // command would propagate as an IPC error, the frontend would catch
+    // and fall back to Home, but sticky-state would still target the
+    // bad project — causing the same failure on every subsequent
+    // launch (boot loop).
+    match open_project(app_conn, &folder) {
+        Ok(OpenOutcome::Loaded { info, connection }) => Ok(LaunchOutcome {
             result: LaunchResult::Loaded { info },
             connection: Some(connection),
         }),
-        OpenOutcome::SchemaTooNew { path, name, project_version, app_version } => {
+        Ok(OpenOutcome::SchemaTooNew { path, name, project_version, app_version }) => {
             Ok(LaunchOutcome {
                 result: LaunchResult::SchemaTooNew { path, name, project_version, app_version },
+                connection: None,
+            })
+        }
+        Err(e) => {
+            let reason = format!("Could not open project: {e}");
+            app_db::remove_recent_project(app_conn, &last_path)?;
+            clear_sticky_session(app_conn)?;
+            Ok(LaunchOutcome {
+                result: LaunchResult::Failed {
+                    path: last_path,
+                    name,
+                    reason,
+                },
                 connection: None,
             })
         }

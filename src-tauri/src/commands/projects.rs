@@ -51,12 +51,15 @@ pub fn create_project(
     let connection = crate::db::project_db::open_or_create(&lifecycle::project_db_path(&project_folder))
         .map_err(|e| CommandError::Db { message: e.to_string() })?;
 
+    // Write sticky session BEFORE installing current_project, so an I/O
+    // failure here doesn't leave backend state with the new project
+    // installed while the command reports failure to the frontend.
+    set_sticky_session(&app_conn, &project_folder)?;
     *state.current_project.lock()? = Some(CurrentProject {
         info: info.clone(),
         db: Mutex::new(connection),
     });
 
-    set_sticky_session(&app_conn, &project_folder)?;
     Ok(info)
 }
 
@@ -100,11 +103,16 @@ pub fn open_project(
 
     match open_p(&app_conn, &folder)? {
         OpenOutcome::Loaded { info, connection } => {
+            // Write sticky session BEFORE installing current_project so
+            // a failure here doesn't leave backend state diverged from
+            // what the frontend believes (command reports error → store
+            // never switches, but current_project would have already
+            // been swapped).
+            set_sticky_session(&app_conn, &folder)?;
             *state.current_project.lock()? = Some(CurrentProject {
                 info: info.clone(),
                 db: Mutex::new(connection),
             });
-            set_sticky_session(&app_conn, &folder)?;
             Ok(LaunchResult::Loaded { info })
         }
         OpenOutcome::SchemaTooNew { path, name, project_version, app_version } => {
@@ -116,9 +124,13 @@ pub fn open_project(
 
 #[tauri::command]
 pub fn close_project(state: State<'_, AppState>) -> Result<(), CommandError> {
-    *state.current_project.lock()? = None;
+    // Lock order: app_db then current_project. Matches create_project /
+    // open_project / check_last_open_project_cmd / delete_project — a
+    // single canonical order prevents the classic A→B vs B→A deadlock
+    // if two commands ever race.
     let app_conn = state.app_db.lock()?;
     clear_sticky_session(&app_conn)?;
+    *state.current_project.lock()? = None;
     Ok(())
 }
 
@@ -235,18 +247,17 @@ pub fn remove_recent_project(
 }
 
 #[tauri::command]
-pub fn delete_project(
+pub async fn delete_project(
     state: State<'_, AppState>,
     folder_path: String,
 ) -> Result<(), CommandError> {
     let folder = PathBuf::from(&folder_path);
 
-    // If this is the currently-open project, we have to drop the
-    // CurrentProject handle first — Windows refuses to delete the
-    // project.db file while we hold a Connection to it. Cache the
-    // ProjectInfo so we can best-effort reinstall the session if delete
-    // then fails mid-way (permission denied, AV lock, transient I/O).
-    // Sticky-session clearing is handled by the inner delete API.
+    // Step 1 (sync, fast): if this is the currently-open project, drop
+    // the CurrentProject handle so its DB Connection releases — Windows
+    // refuses to delete project.db while we hold a Connection to it.
+    // Cache the ProjectInfo so we can best-effort reinstall the session
+    // if delete then fails mid-way.
     let cached_info: Option<ProjectInfo> = {
         let mut current = state.current_project.lock()?;
         if matches!(current.as_ref(), Some(cp) if cp.info.folder_path == folder_path) {
@@ -258,23 +269,27 @@ pub fn delete_project(
         }
     };
 
-    let app_conn = state.app_db.lock()?;
-    let delete_result = crate::project::delete::delete_project(&app_conn, &folder)
-        .map_err(|e| match e {
-            crate::project::delete::DeleteError::Io(e) => CommandError::Io { message: e.to_string() },
-            crate::project::delete::DeleteError::Sql(e) => CommandError::Db { message: e.to_string() },
-            crate::project::delete::DeleteError::AppDb(e) => CommandError::Db { message: e.to_string() },
-        });
+    // Step 2 (off main thread): the actual recursive delete. Project
+    // folders can hold many GB of evidence files; doing this on the
+    // Tauri command thread would freeze the UI and stall sibling IPC.
+    let folder_for_fs = folder.clone();
+    let fs_result: std::io::Result<()> = tokio::task::spawn_blocking(move || {
+        crate::project::delete::remove_project_folder_if_present(&folder_for_fs)
+    })
+    .await
+    .map_err(|e| CommandError::Internal {
+        message: format!("delete blocking task join error: {e}"),
+    })?;
 
-    if delete_result.is_err() {
-        // Best-effort: reinstall the session so the user doesn't lose
-        // their open project just because the disk delete failed. Use
-        // open_existing (no CREATE flag, no migrations) so that if the
-        // original project.db was already removed during a partial
-        // remove_dir_all, we surface the loss instead of silently
-        // creating a fresh empty DB and pretending the session is fine.
-        // If reopen fails, leave current as None and let the user pick
-        // the project again from the chooser.
+    if let Err(io_err) = fs_result {
+        // Step 3a: FS delete failed. Best-effort: reinstall the session
+        // so the user doesn't lose their open project just because the
+        // disk delete failed. Use open_existing (no CREATE flag, no
+        // migrations) so that if the original project.db was already
+        // removed during a partial remove_dir_all, we surface the loss
+        // instead of silently creating a fresh empty DB and pretending
+        // the session is fine. If reopen fails, leave current as None
+        // and let the user pick the project again from the chooser.
         if let Some(info) = cached_info {
             let project_folder = PathBuf::from(&info.folder_path);
             if let Ok(connection) = crate::db::project_db::open_existing(
@@ -286,7 +301,24 @@ pub fn delete_project(
                 });
             }
         }
+        return Err(CommandError::Io { message: io_err.to_string() });
     }
-    delete_result?;
+
+    // Step 3b (sync, fast): FS deletion succeeded (or wasn't needed —
+    // not a project). Clean up the recents row + sticky pointer.
+    let app_conn = state.app_db.lock()?;
+    crate::project::delete::clean_recents_and_sticky(&app_conn, &folder_path).map_err(|e| {
+        match e {
+            crate::project::delete::DeleteError::Io(e) => {
+                CommandError::Io { message: e.to_string() }
+            }
+            crate::project::delete::DeleteError::Sql(e) => {
+                CommandError::Db { message: e.to_string() }
+            }
+            crate::project::delete::DeleteError::AppDb(e) => {
+                CommandError::Db { message: e.to_string() }
+            }
+        }
+    })?;
     Ok(())
 }

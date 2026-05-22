@@ -289,6 +289,39 @@ fn check_last_open_does_not_double_log_or_double_bump_recents() {
 }
 
 #[test]
+fn check_last_open_with_corrupt_db_returns_failed_and_clears_sticky() {
+    // Regression test: if .bh/project.db is present but unreadable, the
+    // sticky-restore preflight must return Failed and clear sticky state,
+    // not bubble an error that the frontend silently swallows — that
+    // would cause the same failure on every launch (boot loop).
+    let app_tmp = tempdir().unwrap();
+    let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
+
+    let project_tmp = tempdir().unwrap();
+    let info = create_project(&app_conn, project_tmp.path(), "Test", None).unwrap();
+    let project_folder = PathBuf::from(&info.folder_path);
+    let db_path = project_folder.join(".bh").join("project.db");
+
+    // Corrupt the project.db so open_project errors out.
+    std::fs::write(&db_path, b"not a sqlite file at all").unwrap();
+
+    app_db::set_state(&app_conn, "last_open_project_path", info.folder_path.as_str()).unwrap();
+
+    let outcome = check_last_open_project(&app_conn).unwrap();
+    match outcome.result {
+        LaunchResult::Failed { path, .. } => {
+            assert_eq!(path, info.folder_path);
+        }
+        other => panic!("expected Failed, got {:?}", std::mem::discriminant(&other)),
+    }
+    assert!(outcome.connection.is_none());
+
+    // Sticky must be cleared so we don't loop on every launch.
+    let v = app_db::get_state(&app_conn, "last_open_project_path").unwrap();
+    assert!(v.is_none(), "sticky-session pointer must be cleared after a corrupt-open failure");
+}
+
+#[test]
 fn check_last_open_with_missing_folder_returns_failed_and_cleans_recents() {
     let app_tmp = tempdir().unwrap();
     let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();

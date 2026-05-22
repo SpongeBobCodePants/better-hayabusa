@@ -16,34 +16,58 @@ pub enum DeleteError {
     AppDb(#[from] app_db::AppDbError),
 }
 
-/// Recursively deletes the project folder at `folder` and removes the
-/// corresponding `recent_projects` entry from app.db. Also clears the
-/// sticky-session pointer if it targets the same folder, so the next
-/// launch doesn't show a Failed takeover for a path that's been removed.
+/// Filesystem half of the delete operation: recursively removes `folder`
+/// iff it's actually a Better Hayabusa project (`.bh/project.db` is
+/// present). If the folder is missing or exists but isn't a project,
+/// this is a no-op — protecting against accidental recursive deletion
+/// of unrelated user data via stale recents entries.
 ///
-/// Only removes the folder if it actually is a Better Hayabusa project
-/// (i.e. `.bh/project.db` is present). If the folder is missing, or
-/// exists but is not a project, the recents row is still cleaned but
-/// the folder itself is left untouched — protecting against accidental
-/// recursive deletion of unrelated user data via stale recents entries.
+/// Split out from [`delete_project`] so the Tauri command can offload
+/// the potentially slow `fs::remove_dir_all` to `spawn_blocking` without
+/// holding a DB Connection across the await.
 ///
 /// **Safety:** the caller MUST first close any open Connection to this
 /// project's project.db, or the file lock will prevent deletion on
 /// Windows.
-pub fn delete_project(app_conn: &Connection, folder: &Path) -> Result<(), DeleteError> {
+pub fn remove_project_folder_if_present(folder: &Path) -> std::io::Result<()> {
     let project_db = folder.join(".bh").join("project.db");
     if folder.exists() && project_db.exists() {
         fs::remove_dir_all(folder)?;
     }
-    let folder_str = folder.display().to_string();
-    app_db::remove_recent_project(app_conn, &folder_str)?;
+    Ok(())
+}
 
+/// DB-half of the delete operation: removes the `recent_projects` row
+/// for `folder_str` and clears `last_open_project_path` if it targets
+/// the same folder. Idempotent — safe to call when the row isn't there.
+pub fn clean_recents_and_sticky(
+    app_conn: &Connection,
+    folder_str: &str,
+) -> Result<(), DeleteError> {
+    app_db::remove_recent_project(app_conn, folder_str)?;
     let sticky = app_db::get_state(app_conn, "last_open_project_path")?;
-    if sticky.as_deref() == Some(folder_str.as_str()) {
+    if sticky.as_deref() == Some(folder_str) {
         app_conn.execute(
             "DELETE FROM app_state WHERE key = 'last_open_project_path'",
             [],
         )?;
     }
     Ok(())
+}
+
+/// Recursively deletes the project folder at `folder` and removes the
+/// corresponding `recent_projects` entry from app.db. Also clears the
+/// sticky-session pointer if it targets the same folder, so the next
+/// launch doesn't show a Failed takeover for a path that's been removed.
+///
+/// Convenience wrapper composing [`remove_project_folder_if_present`]
+/// and [`clean_recents_and_sticky`]. The Tauri command splits these two
+/// halves apart so the FS work can run off the main thread.
+///
+/// **Safety:** the caller MUST first close any open Connection to this
+/// project's project.db, or the file lock will prevent deletion on
+/// Windows.
+pub fn delete_project(app_conn: &Connection, folder: &Path) -> Result<(), DeleteError> {
+    remove_project_folder_if_present(folder)?;
+    clean_recents_and_sticky(app_conn, &folder.display().to_string())
 }

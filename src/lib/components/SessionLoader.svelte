@@ -31,7 +31,15 @@
     }
     switch (result.kind) {
       case 'Loaded':
-        await loadCurrentProject(); // hydrate store from backend
+        try {
+          await loadCurrentProject(); // hydrate store from backend
+        } catch (e) {
+          // If hydration fails after a successful sticky-restore,
+          // don't leave the user on a permanent spinner — log and let
+          // the rest of the app render. The store will stay null;
+          // pages can re-fetch on mount.
+          console.error('loadCurrentProject failed after sticky restore:', e);
+        }
         state = { kind: 'ready' };
         goto('/projects/current');
         break;
