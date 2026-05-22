@@ -72,7 +72,13 @@ export function getAllTimezones(): TimezoneOption[] {
   }
 
   zones.sort((a, b) => a.localeCompare(b));
+  // Dedupe against entries already seeded above (UTC and Local) so a
+  // runtime where Intl.supportedValuesOf includes 'UTC' doesn't yield
+  // duplicate Svelte keys on the picker.
+  const seen = new Set(list.map((o) => o.value));
   for (const zone of zones) {
+    if (seen.has(zone)) continue;
+    seen.add(zone);
     list.push({ value: zone, label: formatTimezoneLabel(zone) });
   }
 

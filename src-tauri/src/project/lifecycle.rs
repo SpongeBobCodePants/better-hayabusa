@@ -323,32 +323,65 @@ pub fn check_last_open_project(app_conn: &Connection) -> Result<LaunchOutcome, L
         .optional()?
         .unwrap_or_else(|| String::from("(unknown)"));
 
-    // Folder still exists?
-    if !folder.exists() {
-        app_db::remove_recent_project(app_conn, &last_path)?;
-        clear_sticky_session(app_conn)?;
-        return Ok(LaunchOutcome {
-            result: LaunchResult::Failed {
-                path: last_path,
-                name,
-                reason: "Folder no longer exists.".to_string(),
-            },
-            connection: None,
-        });
+    // Folder still exists? Use try_exists so a permission-denied error
+    // can be distinguished from genuine absence — Path::exists() returns
+    // false for BOTH "file does not exist" AND "I can't tell because I'm
+    // not allowed to look", and we don't want to destructively purge
+    // recents + sticky over a temporary network-share permission glitch.
+    match folder.try_exists() {
+        Ok(true) => {} // present, continue
+        Ok(false) => {
+            app_db::remove_recent_project(app_conn, &last_path)?;
+            clear_sticky_session(app_conn)?;
+            return Ok(LaunchOutcome {
+                result: LaunchResult::Failed {
+                    path: last_path,
+                    name,
+                    reason: "Folder no longer exists.".to_string(),
+                },
+                connection: None,
+            });
+        }
+        Err(e) => {
+            // Inconclusive — don't purge metadata. Show takeover with a
+            // "try again" reason so the next launch retries.
+            return Ok(LaunchOutcome {
+                result: LaunchResult::Failed {
+                    path: last_path,
+                    name,
+                    reason: format!("Could not access project folder right now: {e}"),
+                },
+                connection: None,
+            });
+        }
     }
 
-    // project.db still there?
-    if !project_db_path(&folder).exists() {
-        app_db::remove_recent_project(app_conn, &last_path)?;
-        clear_sticky_session(app_conn)?;
-        return Ok(LaunchOutcome {
-            result: LaunchResult::Failed {
-                path: last_path,
-                name,
-                reason: "Project metadata (.bh/project.db) is missing.".to_string(),
-            },
-            connection: None,
-        });
+    // project.db still there? Same try_exists treatment — permission
+    // denied on the file shouldn't trigger destructive cleanup.
+    match project_db_path(&folder).try_exists() {
+        Ok(true) => {} // present, continue
+        Ok(false) => {
+            app_db::remove_recent_project(app_conn, &last_path)?;
+            clear_sticky_session(app_conn)?;
+            return Ok(LaunchOutcome {
+                result: LaunchResult::Failed {
+                    path: last_path,
+                    name,
+                    reason: "Project metadata (.bh/project.db) is missing.".to_string(),
+                },
+                connection: None,
+            });
+        }
+        Err(e) => {
+            return Ok(LaunchOutcome {
+                result: LaunchResult::Failed {
+                    path: last_path,
+                    name,
+                    reason: format!("Could not access project metadata right now: {e}"),
+                },
+                connection: None,
+            });
+        }
     }
 
     // Try opening. Hold onto the live connection so the command layer
