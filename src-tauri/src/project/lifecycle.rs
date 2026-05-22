@@ -63,6 +63,11 @@ pub fn create_project(
 ) -> Result<ProjectInfo, LifecycleError> {
     // 1. Validate the name against Windows filename rules (re-validates
     //    what the frontend already checked; never trust the frontend).
+    //    Normalize by trimming so the same string we validate is the one
+    //    we use for the folder path + DB row — otherwise a caller could
+    //    submit "\nCase" which passes validation as "Case" but creates a
+    //    folder literally named "\nCase_..." that Windows mangles.
+    let name = name.trim();
     validate_project_name(name)
         .map_err(|reason| LifecycleError::InvalidName { reason })?;
     validate_project_description(description)

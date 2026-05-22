@@ -61,6 +61,32 @@ fn create_project_writes_db_and_log_and_recents_row() {
 }
 
 #[test]
+fn create_project_trims_name_before_using_for_path_and_db() {
+    // Regression test: a name with leading/trailing whitespace passes
+    // validation (the validator trims internally), but must also be used
+    // in trimmed form for the folder path and DB row — otherwise
+    // direct IPC callers could create folders Windows can't address.
+    let app_tmp = tempdir().unwrap();
+    let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
+    let project_tmp = tempdir().unwrap();
+
+    let info = create_project(&app_conn, project_tmp.path(), "  Case  ", None)
+        .expect("create_project should trim whitespace and succeed");
+
+    assert_eq!(info.project.name, "Case", "DB row should hold the trimmed name");
+    assert!(
+        info.folder_path.contains("Case_"),
+        "folder path should use the trimmed name, got {}",
+        info.folder_path
+    );
+    assert!(
+        !info.folder_path.contains("  Case"),
+        "folder path must not embed the leading whitespace, got {}",
+        info.folder_path
+    );
+}
+
+#[test]
 fn create_project_rejects_invalid_name() {
     let app_tmp = tempdir().unwrap();
     let app_conn = app_db::open_or_create(&app_tmp.path().join("app.db")).unwrap();
