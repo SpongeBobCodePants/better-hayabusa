@@ -19,7 +19,16 @@
   let state = $state<State>({ kind: 'loading' });
 
   onMount(async () => {
-    const result: LaunchResult = await checkLastOpenProject();
+    let result: LaunchResult;
+    try {
+      result = await checkLastOpenProject();
+    } catch (e) {
+      // If the startup IPC errors (e.g. transient DB read failure),
+      // fall through to Home instead of leaving the spinner up forever.
+      console.error('checkLastOpenProject failed at startup:', e);
+      state = { kind: 'ready' };
+      return;
+    }
     switch (result.kind) {
       case 'Loaded':
         await loadCurrentProject(); // hydrate store from backend

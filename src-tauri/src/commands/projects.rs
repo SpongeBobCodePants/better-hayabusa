@@ -268,12 +268,16 @@ pub fn delete_project(
 
     if delete_result.is_err() {
         // Best-effort: reinstall the session so the user doesn't lose
-        // their open project just because the disk delete failed. If
-        // reopen ALSO fails, fall through with current still None and
-        // let the user pick the project again from the chooser.
+        // their open project just because the disk delete failed. Use
+        // open_existing (no CREATE flag, no migrations) so that if the
+        // original project.db was already removed during a partial
+        // remove_dir_all, we surface the loss instead of silently
+        // creating a fresh empty DB and pretending the session is fine.
+        // If reopen fails, leave current as None and let the user pick
+        // the project again from the chooser.
         if let Some(info) = cached_info {
             let project_folder = PathBuf::from(&info.folder_path);
-            if let Ok(connection) = crate::db::project_db::open_or_create(
+            if let Ok(connection) = crate::db::project_db::open_existing(
                 &lifecycle::project_db_path(&project_folder),
             ) {
                 *state.current_project.lock()? = Some(CurrentProject {
