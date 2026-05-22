@@ -22,23 +22,13 @@ pub struct ProjectInfo {
     pub folder_path: String,            // absolute path the user picked
 }
 
-/// One row from `recent_projects` in app.db.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../src/lib/generated/")]
-pub struct RecentProject {
-    pub path: String,
-    pub name: String,
-    pub last_opened_at: String,         // UTC ISO 8601
-}
-
-/// Same as RecentProject plus a computed `last_modified` (mtime of
-/// `.bh/activity.log` in the project folder, ISO 8601 UTC), a
-/// `folder_exists` flag (true iff `<path>/.bh/project.db` exists at
-/// list time — lets the chooser branch on stale rows without an
-/// extra IPC round-trip), and a `description` read from the project's
-/// `project.db` at list time (None when the folder/db is gone or the
-/// project has no description set).
-/// Used by the chooser table only.
+/// One row from `recent_projects` in app.db, enriched at list time:
+/// `last_modified` is the mtime of `.bh/activity.log` (ISO 8601 UTC),
+/// `folder_exists` is true iff `<path>/.bh/project.db` exists at list
+/// time (so the chooser can branch on stale rows without a follow-up
+/// IPC round-trip), and `description` is read from the project's
+/// `project.db` (None when the folder/db is gone or no description is
+/// set). Used by Home + the chooser table.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/lib/generated/")]
 pub struct RecentProjectListEntry {

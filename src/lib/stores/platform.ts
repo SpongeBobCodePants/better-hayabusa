@@ -10,7 +10,3 @@ export async function detectPlatform(): Promise<SupportedPlatform> {
   detected = raw === 'windows' || raw === 'macos' || raw === 'linux' ? raw : 'other';
   return detected;
 }
-
-export function getCachedPlatform(): SupportedPlatform | null {
-  return detected;
-}

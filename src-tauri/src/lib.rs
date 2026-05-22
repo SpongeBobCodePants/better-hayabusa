@@ -3,7 +3,6 @@ use std::sync::Mutex;
 pub mod commands;
 pub mod db;
 pub mod paths;
-pub mod platform;
 pub mod project;
 pub mod types;
 
@@ -54,7 +53,6 @@ pub fn run() {
             commands::projects::close_project,
             commands::projects::get_current_project,
             commands::projects::check_last_open_project_cmd,
-            commands::projects::list_recent_projects,
             commands::projects::list_all_projects,
             commands::projects::remove_recent_project,
             commands::projects::delete_project,

@@ -10,7 +10,7 @@ use crate::project::lifecycle::{
     clear_sticky_session, create_project as create_p, open_project as open_p,
     set_sticky_session, LifecycleError, OpenOutcome,
 };
-use crate::types::{LaunchResult, ProjectInfo, RecentProject, RecentProjectListEntry};
+use crate::types::{LaunchResult, ProjectInfo, RecentProjectListEntry};
 use crate::{AppState, CurrentProject};
 
 impl From<LifecycleError> for CommandError {
@@ -173,33 +173,6 @@ pub fn check_last_open_project_cmd(state: State<'_, AppState>) -> Result<LaunchR
         });
     }
     Ok(outcome.result)
-}
-
-#[tauri::command]
-pub fn list_recent_projects(
-    state: State<'_, AppState>,
-    limit: Option<u32>,
-) -> Result<Vec<RecentProject>, CommandError> {
-    let app_conn = state.app_db.lock()?;
-
-    // If no explicit limit, read recent_projects_count from settings (default 5).
-    let lim = match limit {
-        Some(n) => n,
-        None => app_db::get_state(&app_conn, "recent_projects_count")
-            .ok()
-            .flatten()
-            .and_then(|v| v.parse::<u32>().ok())
-            .unwrap_or(5),
-    };
-
-    let rows = app_db::list_recent_projects(&app_conn)
-        .map_err(|e| CommandError::Db { message: e.to_string() })?;
-    let out: Vec<RecentProject> = rows
-        .into_iter()
-        .take(lim as usize)
-        .map(|(path, name, last_opened_at)| RecentProject { path, name, last_opened_at })
-        .collect();
-    Ok(out)
 }
 
 #[tauri::command]

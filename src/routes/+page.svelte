@@ -116,7 +116,7 @@
 
   <Card>
     <CardHeader>
-      <CardTitle>Recent projects</CardTitle>
+      <CardTitle>Recently active projects</CardTitle>
     </CardHeader>
     <CardContent>
       {#if !loaded}

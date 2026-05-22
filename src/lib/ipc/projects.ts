@@ -1,6 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { ProjectInfo } from '$lib/generated/ProjectInfo';
-import type { RecentProject } from '$lib/generated/RecentProject';
 import type { RecentProjectListEntry } from '$lib/generated/RecentProjectListEntry';
 import type { LaunchResult } from '$lib/generated/LaunchResult';
 
@@ -26,10 +25,6 @@ export async function getCurrentProject(): Promise<ProjectInfo | null> {
 
 export async function checkLastOpenProject(): Promise<LaunchResult> {
   return await invoke<LaunchResult>('check_last_open_project_cmd');
-}
-
-export async function listRecentProjects(limit?: number): Promise<RecentProject[]> {
-  return await invoke<RecentProject[]>('list_recent_projects', { limit });
 }
 
 export async function listAllProjects(): Promise<RecentProjectListEntry[]> {
