@@ -20,6 +20,15 @@ pub const APP_MIGRATIONS: &[Migration] = &[Migration {
     sql: include_str!("../../migrations/app/001_init.sql"),
 }];
 
+pub const PROJECT_MIGRATIONS: &[Migration] = &[Migration {
+    name: "001_init",
+    sql: include_str!("../../migrations/project/001_init.sql"),
+}];
+
+/// Current app-side schema version. Stored in `projects.app_schema_version`
+/// on create; compared on open to detect "project too new for this app."
+pub const CURRENT_PROJECT_SCHEMA_VERSION: u32 = 1;
+
 pub fn run_migrations(conn: &Connection, migrations: &[Migration]) -> Result<(), MigrationError> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)",

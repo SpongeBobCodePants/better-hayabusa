@@ -1,0 +1,460 @@
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use rusqlite::{Connection, OptionalExtension};
+use thiserror::Error;
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
+use time::macros::format_description;
+
+use crate::db::{app_db, project_db};
+use crate::db::migrations::CURRENT_PROJECT_SCHEMA_VERSION;
+use crate::project::activity_log::{append_event, ActivityEvent};
+use crate::project::conflict::{check_folder, ConflictCheckError, FolderState};
+use crate::project::name::{validate_project_description, validate_project_name};
+use crate::types::{LaunchResult, Project, ProjectInfo};
+
+#[derive(Debug, Error)]
+pub enum LifecycleError {
+    #[error("folder already a project: {path}")]
+    AlreadyExists { path: String },
+    #[error("folder is not a project: {path}")]
+    NotAProject { path: String },
+    #[error("folder not found: {path}")]
+    NotFound { path: String },
+    #[error("invalid name: {reason}")]
+    InvalidName { reason: String },
+    #[error("invalid description: {reason}")]
+    InvalidDescription { reason: String },
+    #[error("io: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("sqlite: {0}")]
+    Sql(#[from] rusqlite::Error),
+    #[error("project db: {0}")]
+    ProjectDb(#[from] project_db::ProjectDbError),
+    #[error("app db: {0}")]
+    AppDb(#[from] app_db::AppDbError),
+    #[error("activity log: {0}")]
+    ActivityLog(#[from] crate::project::activity_log::ActivityLogError),
+    #[error("conflict check: {0}")]
+    Conflict(#[from] ConflictCheckError),
+}
+
+/// Path helpers — keep `.bh/` layout in one place.
+pub fn bh_dir(folder: &Path) -> PathBuf { folder.join(".bh") }
+pub fn project_db_path(folder: &Path) -> PathBuf { bh_dir(folder).join("project.db") }
+pub fn activity_log_path(folder: &Path) -> PathBuf { bh_dir(folder).join("activity.log") }
+
+/// Creates a new project. `parent_folder` is the user-picked parent
+/// directory; this function creates a timestamped subfolder
+/// `<parent_folder>/<name>_YYYY.MM.DD_HHMMSS/` (UTC) and places `.bh/`
+/// inside it. Bootstraps `.bh/project.db`, inserts the `projects` row,
+/// writes the first activity log entry, and adds an entry to app.db's
+/// `recent_projects`.
+///
+/// Returns the loaded `ProjectInfo` with `folder_path` set to the
+/// timestamped subfolder (not the parent) — ready for the caller to
+/// install as the current project.
+pub fn create_project(
+    app_conn: &Connection,
+    parent_folder: &Path,
+    name: &str,
+    description: Option<&str>,
+) -> Result<ProjectInfo, LifecycleError> {
+    // 1. Validate the name against Windows filename rules (re-validates
+    //    what the frontend already checked; never trust the frontend).
+    //    Normalize by trimming so the same string we validate is the one
+    //    we use for the folder path + DB row — otherwise a caller could
+    //    submit "\nCase" which passes validation as "Case" but creates a
+    //    folder literally named "\nCase_..." that Windows mangles.
+    let name = name.trim();
+    validate_project_name(name)
+        .map_err(|reason| LifecycleError::InvalidName { reason })?;
+    validate_project_description(description)
+        .map_err(|reason| LifecycleError::InvalidDescription { reason })?;
+
+    // 2. Conflict check on the parent. If the parent itself is already a
+    //    project, the user is trying to create a project inside another
+    //    project — reject the same way as before.
+    match check_folder(parent_folder)? {
+        FolderState::Eligible => {}
+        FolderState::ExistingProject => {
+            return Err(LifecycleError::AlreadyExists {
+                path: parent_folder.display().to_string(),
+            });
+        }
+    }
+
+    // 3. Compute timestamped subfolder name.
+    let ts_format = format_description!("[year].[month].[day]_[hour][minute][second]");
+    let ts = OffsetDateTime::now_utc()
+        .format(&ts_format)
+        .expect("compile-time format description never fails for current_utc time");
+    let project_folder_name = format!("{name}_{ts}");
+    let project_folder = parent_folder.join(&project_folder_name);
+
+    // 4. Create the timestamped project folder. We need this step to
+    //    fail atomically if the folder already exists — otherwise two
+    //    concurrent creates with the same parent/name in the same
+    //    second can both pass an `exists()` check and then both succeed
+    //    in `create_dir_all` (which does NOT fail when the directory
+    //    already exists). The result would be two `projects` rows in
+    //    one project.db, breaking `SELECT ... LIMIT 1`.
+    //
+    //    `fs::create_dir` (non-recursive) errors with
+    //    `ErrorKind::AlreadyExists` atomically — that's the guarantee
+    //    we need. The parent already exists (we just passed the
+    //    conflict check on it).
+    if let Err(e) = fs::create_dir(&project_folder) {
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            return Err(LifecycleError::AlreadyExists {
+                path: project_folder.display().to_string(),
+            });
+        }
+        return Err(LifecycleError::Io(e));
+    }
+
+    // Steps 5–10 do irreversible disk + DB work (bh dir, project.db
+    // bootstrap, projects row, activity log, recents upsert). If ANY of
+    // them fail, the folder we just created in step 4 is half-built and
+    // not usable. Run them inside a closure so we can roll back (recursively
+    // remove the project folder) on any failure rather than leaking a
+    // half-state that the next retry would collide with.
+    let bootstrap = (|| -> Result<Project, LifecycleError> {
+        // 5. Create .bh/ directory inside the project folder.
+        fs::create_dir_all(bh_dir(&project_folder))?;
+
+        // 6. Open project.db (runs migrations).
+        let project_conn = project_db::open_or_create(&project_db_path(&project_folder))?;
+
+        // 7. Insert projects row.
+        let now = OffsetDateTime::now_utc()
+            .format(&Rfc3339)
+            .expect("RFC3339 format never fails for current_utc time");
+        project_conn.execute(
+            "INSERT INTO projects (name, description, created_at, app_schema_version) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![name, description, now, CURRENT_PROJECT_SCHEMA_VERSION],
+        )?;
+
+        // 8. Read the inserted row.
+        let project: Project = project_conn.query_row(
+            "SELECT id, name, description, created_at, app_schema_version FROM projects LIMIT 1",
+            [],
+            |row| Ok(Project {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                created_at: row.get(3)?,
+                app_schema_version: row.get::<_, u32>(4)?,
+            }),
+        )?;
+
+        // 9. Activity log.
+        append_event(
+            &activity_log_path(&project_folder),
+            ActivityEvent::ProjectOpened { name: name.to_string() },
+        )?;
+
+        // 10. Upsert recent_projects with the timestamped subfolder path.
+        app_db::upsert_recent_project(app_conn, &project_folder.display().to_string(), name)?;
+
+        Ok(project)
+    })();
+
+    match bootstrap {
+        Ok(project) => Ok(ProjectInfo {
+            project,
+            folder_path: project_folder.display().to_string(),
+        }),
+        Err(e) => {
+            // Roll back: tear down the half-built folder so retries can
+            // succeed and so we don't leave orphan directories on disk.
+            // The project.db Connection from step 6 has gone out of
+            // scope at this point so the file lock is released.
+            if let Err(cleanup_err) = fs::remove_dir_all(&project_folder) {
+                tracing::warn!(
+                    "create_project rollback failed to remove half-built folder {}: {cleanup_err}",
+                    project_folder.display()
+                );
+            }
+            Err(e)
+        }
+    }
+}
+
+/// Possible outcomes of `open_project`. The schema-version mismatch is
+/// not an Err because it's a designed UX state (user-recoverable: upgrade
+/// the app), not a system failure.
+pub enum OpenOutcome {
+    Loaded {
+        info: ProjectInfo,
+        connection: Connection, // caller installs into AppState
+    },
+    SchemaTooNew {
+        path: String,
+        name: String,
+        project_version: u32,
+        app_version: u32,
+    },
+}
+
+/// Opens an existing project. Validates that `.bh/project.db` exists,
+/// runs forward migrations (no-op if up to date), checks the project's
+/// stored schema version against the app's, logs the open event, bumps
+/// `recent_projects.last_opened_at`.
+pub fn open_project(
+    app_conn: &Connection,
+    folder: &Path,
+) -> Result<OpenOutcome, LifecycleError> {
+    let db_path = project_db_path(folder);
+    if !db_path.exists() {
+        return Err(LifecycleError::NotAProject {
+            path: folder.display().to_string(),
+        });
+    }
+
+    let project_conn = project_db::open_or_create(&db_path)?;
+
+    // Read schema version.
+    let project_version = project_db::read_schema_version(&project_conn)?
+        .ok_or_else(|| LifecycleError::NotAProject {
+            path: folder.display().to_string(),
+        })?;
+
+    if project_version > CURRENT_PROJECT_SCHEMA_VERSION {
+        let name: String = project_conn
+            .query_row("SELECT name FROM projects LIMIT 1", [], |r| r.get(0))
+            .unwrap_or_else(|_| String::from("(unknown)"));
+
+        return Ok(OpenOutcome::SchemaTooNew {
+            path: folder.display().to_string(),
+            name,
+            project_version,
+            app_version: CURRENT_PROJECT_SCHEMA_VERSION,
+        });
+    }
+
+    // Read the project row.
+    let project: Project = project_conn.query_row(
+        "SELECT id, name, description, created_at, app_schema_version FROM projects LIMIT 1",
+        [],
+        |row| Ok(Project {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            description: row.get(2)?,
+            created_at: row.get(3)?,
+            app_schema_version: row.get::<_, u32>(4)?,
+        }),
+    )?;
+
+    let folder_str = folder.display().to_string();
+
+    // Log + upsert recents (best-effort log; recents upsert is required).
+    let _ = append_event(
+        &activity_log_path(folder),
+        ActivityEvent::ProjectOpened { name: project.name.clone() },
+    );
+    app_db::upsert_recent_project(app_conn, &folder_str, &project.name)?;
+
+    Ok(OpenOutcome::Loaded {
+        info: ProjectInfo { project, folder_path: folder_str },
+        connection: project_conn,
+    })
+}
+
+/// Drops the AppState current_project handle. Called from the command
+/// layer (this Rust API doesn't own AppState).
+///
+/// Side effect: clears `last_open_project_path` in app.db, so a subsequent
+/// launch with sticky session enabled lands on Home.
+pub fn clear_sticky_session(app_conn: &Connection) -> Result<(), LifecycleError> {
+    app_conn.execute(
+        "DELETE FROM app_state WHERE key = 'last_open_project_path'",
+        [],
+    )?;
+    Ok(())
+}
+
+/// Sets `last_open_project_path` so the next launch can sticky-restore.
+pub fn set_sticky_session(app_conn: &Connection, folder: &Path) -> Result<(), LifecycleError> {
+    app_db::set_state(app_conn, "last_open_project_path", &folder.display().to_string())?;
+    Ok(())
+}
+
+/// Wrapper around `LaunchResult` that also carries the live project DB
+/// `Connection` when the outcome is `Loaded`. The Tauri command layer
+/// installs the connection into `AppState`; the TS-exported shape is
+/// just `LaunchResult` (via `.result`).
+pub struct LaunchOutcome {
+    pub result: LaunchResult,
+    pub connection: Option<Connection>,
+}
+
+/// Run at app launch. Decides whether to sticky-restore, land on Home,
+/// or show a failure screen.
+///
+/// When this returns `LaunchResult::Loaded`, the project DB has already
+/// been opened (with its side effects: activity log + recents bump) and
+/// the live connection is returned in `LaunchOutcome.connection`. The
+/// command layer must use that connection instead of reopening, or the
+/// open side effects will fire twice per launch.
+pub fn check_last_open_project(app_conn: &Connection) -> Result<LaunchOutcome, LifecycleError> {
+    // Honor the launch_behavior setting.
+    let behavior = app_db::get_state(app_conn, "launch_behavior")?
+        .unwrap_or_else(|| "last_project".to_string());
+    if behavior == "home_page" {
+        return Ok(LaunchOutcome { result: LaunchResult::Disabled, connection: None });
+    }
+
+    let last_path = match app_db::get_state(app_conn, "last_open_project_path")? {
+        Some(p) => p,
+        None => return Ok(LaunchOutcome { result: LaunchResult::NoneSet, connection: None }),
+    };
+
+    let folder = PathBuf::from(&last_path);
+
+    // Look up the friendly name from recents (if any) for error reporting.
+    let name = app_conn
+        .query_row(
+            "SELECT name FROM recent_projects WHERE path = ?1",
+            [&last_path],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()?
+        .unwrap_or_else(|| String::from("(unknown)"));
+
+    // Folder still exists? Use try_exists so a permission-denied error
+    // can be distinguished from genuine absence — Path::exists() returns
+    // false for BOTH "file does not exist" AND "I can't tell because I'm
+    // not allowed to look", and we don't want to destructively purge
+    // recents + sticky over a temporary network-share permission glitch.
+    match folder.try_exists() {
+        Ok(true) => {} // present, continue
+        Ok(false) => {
+            app_db::remove_recent_project(app_conn, &last_path)?;
+            clear_sticky_session(app_conn)?;
+            return Ok(LaunchOutcome {
+                result: LaunchResult::Failed {
+                    path: last_path,
+                    name,
+                    reason: "Folder no longer exists.".to_string(),
+                },
+                connection: None,
+            });
+        }
+        Err(e) => {
+            // Inconclusive — don't purge metadata. Show takeover with a
+            // "try again" reason so the next launch retries.
+            return Ok(LaunchOutcome {
+                result: LaunchResult::Failed {
+                    path: last_path,
+                    name,
+                    reason: format!("Could not access project folder right now: {e}"),
+                },
+                connection: None,
+            });
+        }
+    }
+
+    // project.db still there? Same try_exists treatment — permission
+    // denied on the file shouldn't trigger destructive cleanup.
+    match project_db_path(&folder).try_exists() {
+        Ok(true) => {} // present, continue
+        Ok(false) => {
+            app_db::remove_recent_project(app_conn, &last_path)?;
+            clear_sticky_session(app_conn)?;
+            return Ok(LaunchOutcome {
+                result: LaunchResult::Failed {
+                    path: last_path,
+                    name,
+                    reason: "Project metadata (.bh/project.db) is missing.".to_string(),
+                },
+                connection: None,
+            });
+        }
+        Err(e) => {
+            return Ok(LaunchOutcome {
+                result: LaunchResult::Failed {
+                    path: last_path,
+                    name,
+                    reason: format!("Could not access project metadata right now: {e}"),
+                },
+                connection: None,
+            });
+        }
+    }
+
+    // Try opening. Hold onto the live connection so the command layer
+    // can install it without a second `open_project` call (which would
+    // double-log + double-bump-recents).
+    //
+    // If open_project itself errors (corrupt project.db, missing
+    // projects row, sqlite I/O), convert that into a structured
+    // LaunchResult::Failed and clear the sticky pointer. Otherwise the
+    // command would propagate as an IPC error, the frontend would catch
+    // and fall back to Home, but sticky-state would still target the
+    // bad project — causing the same failure on every subsequent
+    // launch (boot loop).
+    match open_project(app_conn, &folder) {
+        Ok(OpenOutcome::Loaded { info, connection }) => Ok(LaunchOutcome {
+            result: LaunchResult::Loaded { info },
+            connection: Some(connection),
+        }),
+        Ok(OpenOutcome::SchemaTooNew { path, name, project_version, app_version }) => {
+            Ok(LaunchOutcome {
+                result: LaunchResult::SchemaTooNew { path, name, project_version, app_version },
+                connection: None,
+            })
+        }
+        Err(e) => {
+            // Classify: SQLite BUSY/LOCKED (WAL contention, transient
+            // file locks) is recoverable on next launch — don't purge
+            // user recents/sticky over a temporary lock window. For all
+            // other errors (corrupt DB, missing tables, IO read failure,
+            // etc.) the failure is structural and we should clear sticky
+            // so the user isn't stuck in a takeover loop on every boot.
+            let transient = is_transient_open_error(&e);
+            let reason = if transient {
+                format!("Could not open project right now (try again): {e}")
+            } else {
+                format!("Could not open project: {e}")
+            };
+            if !transient {
+                app_db::remove_recent_project(app_conn, &last_path)?;
+                clear_sticky_session(app_conn)?;
+            }
+            Ok(LaunchOutcome {
+                result: LaunchResult::Failed {
+                    path: last_path,
+                    name,
+                    reason,
+                },
+                connection: None,
+            })
+        }
+    }
+}
+
+/// Returns true if a sticky-restore open failure looks like a transient
+/// lock-contention condition (SQLite BUSY/LOCKED) that's likely to clear
+/// on the next launch attempt. The caller skips destructive recents +
+/// sticky cleanup in that case to avoid losing user metadata over a
+/// momentary lock window.
+fn is_transient_open_error(err: &LifecycleError) -> bool {
+    use rusqlite::ErrorCode;
+    fn is_busy_or_locked(e: &rusqlite::Error) -> bool {
+        matches!(
+            e,
+            rusqlite::Error::SqliteFailure(sf, _)
+                if sf.code == ErrorCode::DatabaseBusy || sf.code == ErrorCode::DatabaseLocked
+        )
+    }
+    match err {
+        LifecycleError::Sql(e) => is_busy_or_locked(e),
+        LifecycleError::ProjectDb(crate::db::project_db::ProjectDbError::Sql(e)) => {
+            is_busy_or_locked(e)
+        }
+        LifecycleError::AppDb(crate::db::app_db::AppDbError::Sql(e)) => is_busy_or_locked(e),
+        _ => false,
+    }
+}

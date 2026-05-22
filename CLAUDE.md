@@ -43,7 +43,9 @@ This project uses **Claude Superpowers**. TDD, brainstorming, plan-writing, plan
 - **Process stdout/stderr** is appended to disk on every line AND batched at ~10Hz for IPC to the frontend. Don't emit per-line events.
 - **Help is opt-in.** Never use modals, banners, or "did you know?" popups. Info is available behind icons and a `?` drawer; the user must click.
 - **The portable model is sacred.** No installer, no Program Files, no registry, no `%APPDATA%`. App state lives in `app.db` next to the exe.
-- **Display name vs short code.** Display strings (window title, page headers, About, README, this file) use **"Better Hayabusa"**. Internal short codes — Cargo package `bhc`, library `bhc_lib`, Tauri identifier `com.mercilesssoftware.bhc`, per-project metadata folder `.bhc/` — stay as `bhc` even though the app was renamed from "Better Hayabusa/ChainSaw". Don't propose renaming the internal codes unless asked.
+- **Display name vs short code.** Display strings (window title, page headers, About, README, this file) use **"Better Hayabusa"**. Internal short codes — Cargo package `bhc`, library `bhc_lib`, Tauri identifier `com.mercilesssoftware.bhc` — stay as `bhc` even though the app was renamed from "Better Hayabusa/ChainSaw". Don't propose renaming the internal codes unless asked.
+- **Per-project metadata folder is `.bh/`** (not `.bhc/`). Lives inside each project's timestamped folder and holds `project.db` + `activity.log` (plus SQLite WAL artifacts).
+- **Project folder layout.** When a user creates a project named `<name>` and picks a parent location, the backend creates `<parent>/<name>_YYYY.MM.DD_HHMMSS/` (UTC timestamp) and places `.bh/` inside that. The user-picked path is the *parent* directory, not the project root.
 - **Public repo; never commit real engagement data.** Real client names, real hostnames, real IPs, real file paths from engagements MUST NOT be in tracked files. Synthetic test fixtures use placeholders like `WORKSTATION-01`, `CLIENT-A`, `192.0.2.0/24`. Anything resembling real data goes in the gitignored `/private/` folder (kept locally for ad-hoc testing). Before any first push of new public content, grep history for the data.
 
 ## Stack (do not swap or "just try" alternatives without asking)
@@ -97,16 +99,26 @@ If you skip this, GitHub will reject the push with `GH007: Your push would publi
 
 > Frontend tests (Vitest) and E2E tests (Playwright) land in later milestones.
 
+## Versioning
+
+We use SemVer. `src-tauri/tauri.conf.json` is the canonical version source; `package.json` and `src-tauri/Cargo.toml` mirror it.
+
+- **Patch bump** (`0.1.x` → `0.1.x+1`) happens automatically in `/ship` on every PR.
+- **Minor bump** (`0.x.0` → `0.x+1.0`) is a manual one-line edit at milestone close. M2 close → `0.2.0`, M3 close → `0.3.0`, etc.
+- **Major bump** (`x.0.0` → `x+1.0.0`) is manual. Pre-1.0 we're in experimentation mode; `1.0.0` is cut at M8 close (portable distribution + release). Post-1.0, major bumps follow SemVer — breaking changes or significant feature waves.
+
+About page reads the version via `get_app_version` (Tauri command sourced from `tauri.conf.json`).
+
 ## Gotchas (lessons from earlier work)
 
 - **shadcn-svelte `Button` is link-aware.** When you need a navigation link styled as a button, pass `href` to `<Button>` — don't wrap `<Button>` inside `<a>`. The nested form is invalid HTML (interactive content inside an anchor) and breaks a11y.
 - **Tauri default `bundle.targets: ["nsis"]` ships an installer.** Issue #7 tracks switching to a portable zip per the "portable model is sacred" rule. Until then, `pnpm tauri build` produces an installer, not a portable artifact.
 - **`pnpm tauri dev` opens a window and blocks the shell** until the window closes (and only then `cargo run` exits). Don't run it foreground when scripting; if you need to check the window programmatically, run with `run_in_background` and monitor logs.
-- **ts-rs codegen runs as a "test".** `src-tauri/tests/ts_export.rs` calls `AppVersion::export_all()` / `Os::export_all()` to write `.ts` files to `src/lib/generated/`. A developer who runs `pnpm build` without first running `cargo test` will hit TS errors on missing generated bindings. CI runs cargo test first to avoid this; locally, see [Issue #24](https://github.com/SpongeBobCodePants/better-hayabusa/issues/24) about adding a `pretauri:dev` script.
+- **ts-rs codegen runs as a "test".** `src-tauri/tests/ts_export.rs` calls `AppVersion::export_all()` / `Os::export_all()` to write `.ts` files to `src/lib/generated/`. **These files are committed**, so a fresh clone can `pnpm build` immediately without running `cargo test` first. The trade-off: when you change a ts-rs-derived Rust struct, you must re-run `cargo test` and stage the regenerated TS files in the same commit — otherwise the committed bindings drift from the Rust source. CI runs `cargo test` and `pnpm build`, so drift surfaces as a build failure (the TS that compiles against the new Rust shape would differ from what's checked in).
 - **Per-repo git config is required** (see "Repo setup" above). A fresh clone defaults to the global `user.email`, which is the user's real personal address, which GitHub blocks with `GH007`. Set the noreply alias before the first commit in any clone.
 - **`.gitignore` shipped with the project ignores `private/`** — used as the local-only sandbox for engagement data and scratch test inputs (see "never commit real engagement data" in Conventions). The folder may or may not exist locally; create as needed.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+AGPL-3.0-or-later. See [LICENSE](LICENSE).
 © 2026 Merciless Software.

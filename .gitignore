@@ -21,10 +21,6 @@ vite.config.ts.timestamp-*
 # Tauri generated schemas (auto-completion for capabilities)
 src-tauri/gen/schemas
 
-# ts-rs generated types (regenerated on build)
-src/lib/generated/*
-!src/lib/generated/.gitkeep
-
 # Local env
 .env
 .env.local
@@ -43,7 +39,7 @@ Thumbs.db
 /tools/
 
 # Project state if accidentally created in repo root during dev
-/.bhc/
+/.bh/
 
 # Local-only scratch / private test inputs (real engagement data, etc.)
 /private/

@@ -2,6 +2,8 @@
   import '../app.css';
   import OsGate from '$lib/components/OsGate.svelte';
   import Sidebar from '$lib/components/Sidebar.svelte';
+  import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
+  import SessionLoader from '$lib/components/SessionLoader.svelte';
   import type { Snippet } from 'svelte';
 
   let { children }: { children: Snippet } = $props();
@@ -10,8 +12,13 @@
 <OsGate>
   <div class="flex h-screen">
     <Sidebar />
-    <main class="flex-1 overflow-y-auto bg-slate-50">
-      {@render children()}
+    <main class="flex flex-1 flex-col overflow-hidden bg-slate-50">
+      <Breadcrumbs />
+      <div class="flex-1 overflow-y-auto">
+        <SessionLoader>
+          {@render children()}
+        </SessionLoader>
+      </div>
     </main>
   </div>
 </OsGate>

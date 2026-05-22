@@ -1,9 +1,10 @@
 [package]
 name = "bhc"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Tauri App"
 authors = ["Merciless Software"]
 edition = "2021"
+license = "AGPL-3.0-or-later"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -21,6 +22,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-os = "2"
+tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process", "io-util", "sync"] }
@@ -29,6 +31,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = "1"
 ts-rs = { version = "10", features = ["serde-json-impl"] }
+time = { version = "0.3", features = ["formatting", "macros"] }
 
 [dev-dependencies]
 tempfile = "3"

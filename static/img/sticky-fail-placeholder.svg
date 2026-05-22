@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <rect width="200" height="200" rx="12" fill="#fef2f2"/>
+  <text x="100" y="100" text-anchor="middle" dominant-baseline="middle"
+        font-family="system-ui, sans-serif" font-size="14" fill="#b91c1c">
+    [sticky-fail placeholder]
+  </text>
+  <text x="100" y="120" text-anchor="middle" dominant-baseline="middle"
+        font-family="system-ui, sans-serif" font-size="10" fill="#dc2626">
+    asset commissioned via Issue #27
+  </text>
+</svg>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button';
+  import { ISSUES_URL } from '$lib/constants';
   let { detectedOs }: { detectedOs: string } = $props();
 </script>
 
@@ -14,7 +15,7 @@
       Cross-platform support is planned. Watch the GitHub project for progress.
     </p>
     <Button
-      href="https://github.com/SpongeBobCodePants/better-hayabusa/issues"
+      href={ISSUES_URL}
       target="_blank"
       rel="noopener noreferrer"
       variant="outline"
