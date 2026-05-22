@@ -15,6 +15,7 @@ use crate::{AppState, CurrentProject};
 
 impl From<LifecycleError> for CommandError {
     fn from(e: LifecycleError) -> Self {
+        use crate::project::conflict::ConflictCheckError;
         match e {
             LifecycleError::AlreadyExists { path } => CommandError::AlreadyExists { path },
             LifecycleError::NotAProject { path } => CommandError::NotAProject { path },
@@ -26,7 +27,20 @@ impl From<LifecycleError> for CommandError {
             LifecycleError::ProjectDb(e) => CommandError::Db { message: e.to_string() },
             LifecycleError::AppDb(e) => CommandError::Db { message: e.to_string() },
             LifecycleError::ActivityLog(e) => CommandError::Io { message: e.to_string() },
-            LifecycleError::Conflict(e) => CommandError::Internal { message: e.to_string() },
+            // Surface conflict-check failures with their actual cause so
+            // the UI can show "parent folder no longer exists" / "path
+            // is not a directory" instead of a generic Internal error.
+            LifecycleError::Conflict(ConflictCheckError::NotFound(path)) => {
+                CommandError::NotFound { path }
+            }
+            LifecycleError::Conflict(ConflictCheckError::NotADirectory(path)) => {
+                CommandError::Io {
+                    message: format!("Path is not a directory: {path}"),
+                }
+            }
+            LifecycleError::Conflict(ConflictCheckError::Io(e)) => {
+                CommandError::Io { message: e.to_string() }
+            }
         }
     }
 }
@@ -189,50 +203,67 @@ pub fn list_recent_projects(
 }
 
 #[tauri::command]
-pub fn list_all_projects(state: State<'_, AppState>) -> Result<Vec<RecentProjectListEntry>, CommandError> {
-    let app_conn = state.app_db.lock()?;
-    let rows = app_db::list_recent_projects(&app_conn)
-        .map_err(|e| CommandError::Db { message: e.to_string() })?;
+pub async fn list_all_projects(
+    state: State<'_, AppState>,
+) -> Result<Vec<RecentProjectListEntry>, CommandError> {
+    // Take a brief app_db lock to read the basic recents rows.
+    let rows = {
+        let app_conn = state.app_db.lock()?;
+        app_db::list_recent_projects(&app_conn)
+            .map_err(|e| CommandError::Db { message: e.to_string() })?
+    };
 
-    let mut out = Vec::with_capacity(rows.len());
-    for (path, name, last_opened_at) in rows {
-        let folder = std::path::Path::new(&path);
-        let log = folder.join(".bh").join("activity.log");
-        let last_modified = std::fs::metadata(&log)
-            .ok()
-            .and_then(|m| m.modified().ok())
-            .and_then(|t| {
-                use time::OffsetDateTime;
-                use time::format_description::well_known::Rfc3339;
-                OffsetDateTime::from(t).format(&Rfc3339).ok()
-            });
-        let project_db = lifecycle::project_db_path(folder);
-        let folder_exists = project_db.exists();
-        let description = if folder_exists {
-            rusqlite::Connection::open(&project_db)
+    // Offload per-row FS metadata + per-row project.db opens to a
+    // blocking thread. Otherwise a cold / AV-scanned / lock-contended
+    // project DB stalls the command thread and visibly freezes
+    // navigation. The app_db lock is already released by this point.
+    let entries = tokio::task::spawn_blocking(move || {
+        let mut out = Vec::with_capacity(rows.len());
+        for (path, name, last_opened_at) in rows {
+            let folder = std::path::Path::new(&path);
+            let log = folder.join(".bh").join("activity.log");
+            let last_modified = std::fs::metadata(&log)
                 .ok()
-                .and_then(|conn| {
-                    conn.query_row(
-                        "SELECT description FROM projects LIMIT 1",
-                        [],
-                        |r| r.get::<_, Option<String>>(0),
-                    )
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| {
+                    use time::OffsetDateTime;
+                    use time::format_description::well_known::Rfc3339;
+                    OffsetDateTime::from(t).format(&Rfc3339).ok()
+                });
+            let project_db = lifecycle::project_db_path(folder);
+            let folder_exists = project_db.exists();
+            let description = if folder_exists {
+                rusqlite::Connection::open(&project_db)
                     .ok()
-                })
-                .flatten()
-        } else {
-            None
-        };
-        out.push(RecentProjectListEntry {
-            path,
-            name,
-            description,
-            last_opened_at,
-            last_modified,
-            folder_exists,
-        });
-    }
-    Ok(out)
+                    .and_then(|conn| {
+                        conn.query_row(
+                            "SELECT description FROM projects LIMIT 1",
+                            [],
+                            |r| r.get::<_, Option<String>>(0),
+                        )
+                        .ok()
+                    })
+                    .flatten()
+            } else {
+                None
+            };
+            out.push(RecentProjectListEntry {
+                path,
+                name,
+                description,
+                last_opened_at,
+                last_modified,
+                folder_exists,
+            });
+        }
+        out
+    })
+    .await
+    .map_err(|e| CommandError::Internal {
+        message: format!("list_all_projects blocking task join: {e}"),
+    })?;
+
+    Ok(entries)
 }
 
 #[tauri::command]
@@ -293,17 +324,25 @@ pub async fn delete_project(
         // migrations) so that if the original project.db was already
         // removed during a partial remove_dir_all, we surface the loss
         // instead of silently creating a fresh empty DB and pretending
-        // the session is fine. If reopen fails, leave current as None
-        // and let the user pick the project again from the chooser.
+        // the session is fine.
+        //
+        // Only restore if the current_project slot is STILL empty. The
+        // FS work ran on a blocking thread, so another IPC command
+        // could have opened a different project while we awaited; we
+        // must not clobber a newer selection.
         if let Some(info) = cached_info {
             let project_folder = PathBuf::from(&info.folder_path);
             if let Ok(connection) = crate::db::project_db::open_existing(
                 &lifecycle::project_db_path(&project_folder),
             ) {
-                *state.current_project.lock()? = Some(CurrentProject {
-                    info,
-                    db: Mutex::new(connection),
-                });
+                let mut current = state.current_project.lock()?;
+                if current.is_none() {
+                    *current = Some(CurrentProject {
+                        info,
+                        db: Mutex::new(connection),
+                    });
+                }
+                // else: a newer project was installed mid-flight; leave it.
             }
         }
         return Err(CommandError::Io { message: io_err.to_string() });
@@ -311,19 +350,18 @@ pub async fn delete_project(
 
     // Step 3b (sync, fast): FS deletion succeeded (or wasn't needed —
     // not a project). Clean up the recents row + sticky pointer.
+    //
+    // Cleanup failures here are NON-FATAL: the user-visible action
+    // (folder removal) already succeeded, and reporting "delete failed"
+    // would prompt them to retry an operation that's already complete.
+    // Stale metadata gets auto-cleaned by check_last_open_project on
+    // the next launch (folder-doesn't-exist branch), so the worst case
+    // is one extra "Failed" takeover the user dismisses.
     let app_conn = state.app_db.lock()?;
-    crate::project::delete::clean_recents_and_sticky(&app_conn, &folder_path).map_err(|e| {
-        match e {
-            crate::project::delete::DeleteError::Io(e) => {
-                CommandError::Io { message: e.to_string() }
-            }
-            crate::project::delete::DeleteError::Sql(e) => {
-                CommandError::Db { message: e.to_string() }
-            }
-            crate::project::delete::DeleteError::AppDb(e) => {
-                CommandError::Db { message: e.to_string() }
-            }
-        }
-    })?;
+    if let Err(e) = crate::project::delete::clean_recents_and_sticky(&app_conn, &folder_path) {
+        tracing::warn!(
+            "post-delete cleanup of recents/sticky failed (folder already removed): {e}"
+        );
+    }
     Ok(())
 }

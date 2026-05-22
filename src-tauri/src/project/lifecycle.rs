@@ -114,45 +114,72 @@ pub fn create_project(
         return Err(LifecycleError::Io(e));
     }
 
-    // 5. Create .bh/ directory inside the project folder.
-    fs::create_dir_all(bh_dir(&project_folder))?;
+    // Steps 5–10 do irreversible disk + DB work (bh dir, project.db
+    // bootstrap, projects row, activity log, recents upsert). If ANY of
+    // them fail, the folder we just created in step 4 is half-built and
+    // not usable. Run them inside a closure so we can roll back (recursively
+    // remove the project folder) on any failure rather than leaking a
+    // half-state that the next retry would collide with.
+    let bootstrap = (|| -> Result<Project, LifecycleError> {
+        // 5. Create .bh/ directory inside the project folder.
+        fs::create_dir_all(bh_dir(&project_folder))?;
 
-    // 6. Open project.db (runs migrations).
-    let project_conn = project_db::open_or_create(&project_db_path(&project_folder))?;
+        // 6. Open project.db (runs migrations).
+        let project_conn = project_db::open_or_create(&project_db_path(&project_folder))?;
 
-    // 7. Insert projects row.
-    let now = OffsetDateTime::now_utc()
-        .format(&Rfc3339)
-        .expect("RFC3339 format never fails for current_utc time");
-    project_conn.execute(
-        "INSERT INTO projects (name, description, created_at, app_schema_version) VALUES (?1, ?2, ?3, ?4)",
-        rusqlite::params![name, description, now, CURRENT_PROJECT_SCHEMA_VERSION],
-    )?;
+        // 7. Insert projects row.
+        let now = OffsetDateTime::now_utc()
+            .format(&Rfc3339)
+            .expect("RFC3339 format never fails for current_utc time");
+        project_conn.execute(
+            "INSERT INTO projects (name, description, created_at, app_schema_version) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![name, description, now, CURRENT_PROJECT_SCHEMA_VERSION],
+        )?;
 
-    // 8. Read the inserted row.
-    let project: Project = project_conn.query_row(
-        "SELECT id, name, description, created_at, app_schema_version FROM projects LIMIT 1",
-        [],
-        |row| Ok(Project {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            description: row.get(2)?,
-            created_at: row.get(3)?,
-            app_schema_version: row.get::<_, u32>(4)?,
+        // 8. Read the inserted row.
+        let project: Project = project_conn.query_row(
+            "SELECT id, name, description, created_at, app_schema_version FROM projects LIMIT 1",
+            [],
+            |row| Ok(Project {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                created_at: row.get(3)?,
+                app_schema_version: row.get::<_, u32>(4)?,
+            }),
+        )?;
+
+        // 9. Activity log.
+        append_event(
+            &activity_log_path(&project_folder),
+            ActivityEvent::ProjectOpened { name: name.to_string() },
+        )?;
+
+        // 10. Upsert recent_projects with the timestamped subfolder path.
+        app_db::upsert_recent_project(app_conn, &project_folder.display().to_string(), name)?;
+
+        Ok(project)
+    })();
+
+    match bootstrap {
+        Ok(project) => Ok(ProjectInfo {
+            project,
+            folder_path: project_folder.display().to_string(),
         }),
-    )?;
-
-    // 9. Activity log.
-    append_event(
-        &activity_log_path(&project_folder),
-        ActivityEvent::ProjectOpened { name: name.to_string() },
-    )?;
-
-    // 10. Upsert recent_projects with the timestamped subfolder path.
-    let folder_str = project_folder.display().to_string();
-    app_db::upsert_recent_project(app_conn, &folder_str, name)?;
-
-    Ok(ProjectInfo { project, folder_path: folder_str })
+        Err(e) => {
+            // Roll back: tear down the half-built folder so retries can
+            // succeed and so we don't leave orphan directories on disk.
+            // The project.db Connection from step 6 has gone out of
+            // scope at this point so the file lock is released.
+            if let Err(cleanup_err) = fs::remove_dir_all(&project_folder) {
+                tracing::warn!(
+                    "create_project rollback failed to remove half-built folder {}: {cleanup_err}",
+                    project_folder.display()
+                );
+            }
+            Err(e)
+        }
+    }
 }
 
 /// Possible outcomes of `open_project`. The schema-version mismatch is
