@@ -240,10 +240,15 @@ pub fn remove_recent_project(
     state: State<'_, AppState>,
     folder_path: String,
 ) -> Result<(), CommandError> {
+    // Also clear sticky-session pointer if it targets this same path —
+    // otherwise dismissing a stale recent leaves the next launch
+    // trying to restore the dead path and showing a Failed takeover.
     let app_conn = state.app_db.lock()?;
-    app_db::remove_recent_project(&app_conn, &folder_path)
-        .map(|_| ())
-        .map_err(|e| CommandError::Db { message: e.to_string() })
+    crate::project::delete::clean_recents_and_sticky(&app_conn, &folder_path).map_err(|e| match e {
+        crate::project::delete::DeleteError::Io(e) => CommandError::Io { message: e.to_string() },
+        crate::project::delete::DeleteError::Sql(e) => CommandError::Db { message: e.to_string() },
+        crate::project::delete::DeleteError::AppDb(e) => CommandError::Db { message: e.to_string() },
+    })
 }
 
 #[tauri::command]

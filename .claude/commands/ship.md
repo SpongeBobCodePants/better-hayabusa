@@ -27,27 +27,37 @@ If a check fails, report exactly which one and stop. Don't try to fix unless the
    - **Body:** standard format — `## Summary` (1–3 bullets), `## Test plan` (checklist of what was verified), and link any closed Issues (`Closes #NN`).
 3. Capture the PR number and URL. Report them to the user.
 
+## Codex review mode (standard vs thorough)
+
+Codex has a per-repo review-thoroughness setting in its cloud dashboard. Two modes seen in practice:
+
+- **Standard mode:** acks within ~1 min, finishes review within ~6 min. The original timings in this command were tuned for this.
+- **Thorough mode:** acks can take up to 5 min (one cycle on PR #35 took ~5 min before the 👀 appeared), finishes review in 12–17 min. Surfaces materially more findings per cycle (cycle 7 on PR #35: 7 inline comments vs. typical 1–3) and re-evaluates the whole PR from scratch each pass rather than just the latest diff — meaning it can resurface findings you rejected with a prior PR comment.
+
+The timing windows below are sized for thorough mode (the slower of the two). They're slightly generous for standard mode but won't cause issues; if a session is clearly under standard timings, the loops just exit faster on the success branch.
+
+If you don't know which mode is on, assume thorough (safer default — the timings are longer but not by much, and you won't false-positive on a slow ack).
+
 ## Phase B — Request Codex review (with retry)
 
 1. Post a PR comment containing exactly `@codex review` via `gh pr comment <PR#> --body "@codex review"`. Capture the returned comment ID/URL.
-2. Wait 3 minutes (Monitor or ScheduleWakeup, whichever fits the budget).
-3. Check for acknowledgement. Codex typically acks with an eye emoji (👀) reaction on the trigger comment, OR with a fresh PR comment from a user matching `codex*` / `openai*`. Detection:
+2. Wait up to 5 minutes for the ack, polling once per minute. Codex typically acks with an eye emoji (👀) reaction on the trigger comment, OR with a fresh PR comment from a user matching `codex*` / `openai*`. Detection:
    ```
    gh api repos/{owner}/{repo}/issues/comments/{commentId}/reactions --jq '.[] | select(.content=="eyes") | .user.login'
    gh pr view <PR#> --json comments --jq '.comments[] | select(.author.login | test("(?i)codex|openai")) | .body'
    ```
-4. **If acked:** proceed to Phase C.
-5. **If no ack after 3 min:** post `@codex review` again as a NEW comment (don't edit the original — Codex may not re-trigger on edits). Wait another 3 min.
-6. **If still no ack:** STOP and ask the user. Two no-acks usually means Codex isn't installed/enabled on the repo, the bot is down, or rate-limited. Don't keep spamming.
+3. **If acked:** proceed to Phase C.
+4. **If no ack after 5 min:** post `@codex review` again as a NEW comment (don't edit the original — Codex may not re-trigger on edits). Wait another 5 min.
+5. **If still no ack:** STOP and ask the user. Two no-acks usually means Codex isn't installed/enabled on the repo, the bot is down, or rate-limited. Don't keep spamming.
 
 ## Phase C — Wait for Codex to finish reviewing
 
-1. Poll every 3 min, up to 15 min total (5 polls max). Use Monitor with an `until ...; do sleep 180; done` loop.
+1. Poll every 3 min, up to **25 min total** (8 polls max). Use Monitor with an `until ...; do sleep 180; done` loop. Thorough-mode reviews routinely run 12–17 min; the 15-min cap from the previous version of this spec was load-bearing in a way it wasn't designed to be — bump to 25 to give ~30% headroom.
 2. "Done" = Codex has posted ONE of:
    - A formal PR review (`gh pr view <PR#> --json reviews --jq '.reviews[] | select(.author.login | test("(?i)codex|openai"))'`)
    - A summary comment after the ack (distinct from the ack itself)
    - Inline review comments (`gh api repos/{owner}/{repo}/pulls/{PR#}/comments`)
-3. **If 15 min elapses with no completion:** STOP and ask the user (could be a long review queue, or Codex is silently stuck).
+3. **If 25 min elapses with no completion:** STOP and ask the user (could be a long review queue, or Codex is silently stuck).
 
 ## Phase D — Evaluate feedback
 
@@ -78,11 +88,17 @@ If any are valid: implement the fixes locally, commit (one focused commit per fi
 
 ## "Going in circles" detection
 
-Before each Phase D evaluation, check whether you're spinning. Heuristics — any ONE of these means stop and ask:
+Before each Phase D evaluation, classify the cycle's findings into three buckets first, then check the signals:
 
-- The SAME feedback item appears across 2+ cycles (Codex flagged it, you "fixed" it, it's back).
-- Net LOC change across the last 2 cycles is < 5 lines (lots of churn, no real progress).
-- The cycle's feedback is purely about something the user explicitly approved earlier (Codex is fighting CLAUDE.md or the spec — that's a Codex-vs-project disagreement, not a fix).
+- **Net-new findings.** Things Codex has not flagged before on this PR.
+- **Repeats of previously-rejected findings.** Items you already rejected (with a PR comment explaining why) that Codex is surfacing again — common in thorough mode, which re-reviews the whole PR each pass and does not appear to read your prior rejection comments. **Discount these entirely from the circles signal.** Post a one-line reply to the new inline comment re-pointing at the original rejection, then move on. They are noise, not progress, but not loop evidence either.
+- **Repeats of previously-validated findings.** Items Codex flagged before, you tried to fix, and it's flagging the SAME thing again. These ARE the strong loop signal — the fix didn't land or didn't address what Codex meant.
+
+Heuristics — any ONE of these means stop and ask:
+
+- A finding that was previously **validated and fixed** is back (the fix didn't take, or Codex disagrees with the fix). This is the canonical "going in circles" — Codex and the implementer are not converging on the same understanding.
+- Among the **non-rejection findings** (i.e. exclude the discounted bucket above), net LOC change across the last 2 cycles is < 5 lines (lots of churn, no real progress).
+- The cycle's feedback is dominantly (≥50% of net-new items) about something the user explicitly approved earlier — Codex is fighting CLAUDE.md or the spec, that's a Codex-vs-project disagreement, not a fix. A single such item is noise; half or more of the cycle is a signal.
 - You can't articulate, in one sentence, what the next round of fixes is trying to accomplish.
 
 When you stop for circles: summarize what's happening, link the relevant Codex comments, and propose the choice (keep iterating with adjustments, override Codex and merge, or close the PR and rethink).
@@ -96,8 +112,12 @@ In every case where this command says "STOP", do this:
 
 ## What to report at the end
 
-- PR URL + final state (merged / waiting / aborted)
-- Cycle count
-- Codex feedback summary (1–3 bullets — what was caught and addressed)
-- Any user decisions made along the way
-- Local state (`git status`, current branch, last commit)
+- PR URL + final state (merged / waiting / aborted).
+- **Cycle metrics:**
+  - Total cycles run.
+  - Total findings, split into: valid-and-fixed, rejected-with-comment, repeats-of-rejected (noise).
+  - Total wall-clock elapsed from first `@codex review` to merge.
+  - Review mode used (standard vs thorough), if known.
+- Codex feedback summary (1–3 bullets — the substantive things caught and addressed; skip the noise).
+- Any user decisions made along the way (rejected findings, scope deferrals, mid-loop check-ins).
+- Local state (`git status`, current branch, last commit).

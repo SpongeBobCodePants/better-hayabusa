@@ -347,9 +347,22 @@ pub fn check_last_open_project(app_conn: &Connection) -> Result<LaunchOutcome, L
             })
         }
         Err(e) => {
-            let reason = format!("Could not open project: {e}");
-            app_db::remove_recent_project(app_conn, &last_path)?;
-            clear_sticky_session(app_conn)?;
+            // Classify: SQLite BUSY/LOCKED (WAL contention, transient
+            // file locks) is recoverable on next launch — don't purge
+            // user recents/sticky over a temporary lock window. For all
+            // other errors (corrupt DB, missing tables, IO read failure,
+            // etc.) the failure is structural and we should clear sticky
+            // so the user isn't stuck in a takeover loop on every boot.
+            let transient = is_transient_open_error(&e);
+            let reason = if transient {
+                format!("Could not open project right now (try again): {e}")
+            } else {
+                format!("Could not open project: {e}")
+            };
+            if !transient {
+                app_db::remove_recent_project(app_conn, &last_path)?;
+                clear_sticky_session(app_conn)?;
+            }
             Ok(LaunchOutcome {
                 result: LaunchResult::Failed {
                     path: last_path,
@@ -359,5 +372,29 @@ pub fn check_last_open_project(app_conn: &Connection) -> Result<LaunchOutcome, L
                 connection: None,
             })
         }
+    }
+}
+
+/// Returns true if a sticky-restore open failure looks like a transient
+/// lock-contention condition (SQLite BUSY/LOCKED) that's likely to clear
+/// on the next launch attempt. The caller skips destructive recents +
+/// sticky cleanup in that case to avoid losing user metadata over a
+/// momentary lock window.
+fn is_transient_open_error(err: &LifecycleError) -> bool {
+    use rusqlite::ErrorCode;
+    fn is_busy_or_locked(e: &rusqlite::Error) -> bool {
+        matches!(
+            e,
+            rusqlite::Error::SqliteFailure(sf, _)
+                if sf.code == ErrorCode::DatabaseBusy || sf.code == ErrorCode::DatabaseLocked
+        )
+    }
+    match err {
+        LifecycleError::Sql(e) => is_busy_or_locked(e),
+        LifecycleError::ProjectDb(crate::db::project_db::ProjectDbError::Sql(e)) => {
+            is_busy_or_locked(e)
+        }
+        LifecycleError::AppDb(crate::db::app_db::AppDbError::Sql(e)) => is_busy_or_locked(e),
+        _ => false,
     }
 }
